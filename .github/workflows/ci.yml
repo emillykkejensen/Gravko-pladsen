@@ -1,0 +1,213 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests
+        run: npm test
+
+      # A canvas suite that fails on CI is hard to reason about from the log alone —
+      # the traces and screenshots say which tap landed where.
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # The Android app is the same web build inside a Capacitor shell. It only runs on main and
+  # only after the tests pass, so a broken game can never turn into an installable APK.
+  android:
+    needs: check
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # Capacitor 8 builds with the Android Gradle Plugin 8.13, which needs JDK 21.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - run: npm ci
+
+      - name: Build the web app
+        run: npm run build
+
+      - name: Copy it into the Android project
+        run: npx cap sync android
+
+      # Absent for a fork or a first run before the secrets are set. The build still
+      # produces an APK, signed with Android's debug key, and the publish step below
+      # refuses to offer that as a download.
+      - name: Decode the signing keystore
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "path=$RUNNER_TEMP/release.jks" >> "$GITHUB_OUTPUT"
+            echo "Signing with the release keystore."
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set — building with the debug key, which cannot be published."
+          fi
+
+      - name: Assemble the APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ steps.keystore.outputs.path }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew --no-daemon assembleRelease \
+            -PappVersionCode=${{ github.run_number }} \
+            -PappVersionName=1.0.${{ github.run_number }}
+
+      # Which key actually signed it decides whether this build can install over the last
+      # one. A debug-signed APK would force an uninstall later, taking the save with it, so
+      # it is never published — only offered as a build artifact to look at.
+      #
+      # apksigner rather than keytool: keytool only reads v1 JAR signatures, and for
+      # minSdk 24 the Gradle plugin may sign with v2/v3 only, where keytool sees nothing.
+      - name: Check which key signed it
+        id: signed
+        env:
+          SIGNED_WITH_KEYSTORE: ${{ steps.keystore.outputs.path != '' }}
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          ls -l "$APK"
+
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --print-certs "$APK" | tee signer.txt
+          else
+            keytool -printcert -jarfile "$APK" | tee signer.txt
+          fi
+
+          if [ "$SIGNED_WITH_KEYSTORE" = "true" ]; then
+            # A keystore was supplied, so a debug certificate here means the Gradle wiring
+            # is broken and the APK would be unupgradable. Loud, not silent.
+            if grep -q "CN=Android Debug" signer.txt; then
+              echo "::error::A keystore was configured but the APK is debug-signed."
+              exit 1
+            fi
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No keystore configured, so this build is debug-signed and will not be published."
+          fi
+
+          mkdir -p out
+          cp "$APK" out/gravko-pladsen.apk
+
+      # v7 uploads a lone file unzipped, so this downloads as the APK itself rather than a
+      # zip around it — which matters if the release below was skipped and this is the only
+      # copy. It also drops the Node 20 deprecation warning the v4 actions were printing.
+      # "No permissions" is a claim worth enforcing rather than repeating: a plugin added
+      # later can pull one in through manifest merging without anyone noticing. androidx
+      # defines one app-private signature permission for its own non-exported receivers,
+      # which grants nothing and never reaches the user, so only real android.permission.*
+      # entries fail the build.
+      - name: Inspect the APK
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1)
+
+          echo "--- declared permissions"
+          "$AAPT2" dump permissions "$APK"
+
+          if "$AAPT2" dump permissions "$APK" | grep -q "uses-permission: name='android\.permission"; then
+            echo "::error::The APK now requires a system permission. It used to require none."
+            exit 1
+          fi
+
+          echo "--- the game is actually inside it"
+          unzip -l "$APK" | grep -E "assets/public/(index.html|fonts/)" || {
+            echo "::error::The web build is missing from the APK — did cap sync run?"
+            exit 1
+          }
+
+      - name: Upload the APK as a build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: gravko-pladsen-apk-1.0.${{ github.run_number }}
+          path: out/gravko-pladsen.apk
+          retention-days: 30
+
+      # A release asset has a plain download URL that works in a phone browser with no
+      # login, which a build artifact does not. One rolling "latest" release means one
+      # bookmark that always has the current build behind it.
+      - name: Publish it to the latest release
+        if: steps.signed.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # One asset under one stable name, so the download link never changes. Older
+          # builds stay available as CI artifacts rather than piling up on the release.
+          NOTES="Version 1.0.${{ github.run_number }}, built from ${{ github.sha }}.
+
+          Download **gravko-pladsen.apk** on the phone and open it. Android asks once for
+          permission to install apps from the browser.
+
+          Needs Android 7 or newer. No system permissions, not even internet access, and it
+          works entirely offline."
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest out/gravko-pladsen.apk --clobber
+            gh release edit latest --notes "$NOTES"
+          else
+            gh release create latest out/gravko-pladsen.apk \
+              --title "Gravko-pladsen — seneste build" \
+              --notes "$NOTES" \
+              --prerelease
+          fi
+
+      - name: Upload the Gradle log on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gradle-reports
+          path: |
+            android/app/build/reports/
+            android/build/reports/
+          retention-days: 7
+          if-no-files-found: ignore

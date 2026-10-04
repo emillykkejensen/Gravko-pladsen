@@ -1,0 +1,18 @@
+/*
+ * Nunito, latin subset, bundled rather than linked.
+ *
+ * The Android build has no network by design, and a web build that waits on a CDN draws
+ * its first frame in a fallback face. Google serves one variable file for the whole 400-700
+ * range, so this is a single 38 KB download covering every weight the game asks for.
+ *
+ * `font-display: block` because Phaser positions every label at create time — a swap after
+ * layout leaves text sitting outside pills that were measured for a different face.
+ */
+
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: block;
+  src: url('nunito.woff2') format('woff2');
+}

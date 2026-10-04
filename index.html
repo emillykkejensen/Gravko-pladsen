@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#A9DAF0" />
+  <meta name="description" content="Gravko-pladsen - byg maskinerne og byg byen. Et byggepladsspil for børn." />
+  <title>Gravko-pladsen</title>
+
+  <!-- Bundled, not linked: the Android build ships without network access. -->
+  <link rel="stylesheet" href="./fonts/nunito.css" />
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #A9DAF0;
+      font-family: Nunito, 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+
+      /*
+       * A child will find every browser gesture there is. Inside the Android app these
+       * would each look like the game breaking: a long press raising a text-selection
+       * menu, a swipe bouncing the whole page, a double tap zooming the canvas.
+       */
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      overscroll-behavior: none;
+      touch-action: manipulation;
+    }
+    #game-container { width: 100%; height: 100%; }
+    canvas { display: block; touch-action: none; }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

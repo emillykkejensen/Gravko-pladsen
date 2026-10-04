@@ -1,0 +1,41 @@
+{
+  "name": "gravko-spil",
+  "version": "1.0.0",
+  "description": "Gravko-pladsen - et byggepladsspil for børn",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "android:sync": "npm run build && cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease",
+    "icons": "node tools/make-icons.mjs",
+    "standalone": "npm run build && node tools/make-standalone.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/emillykkejensen/Gravko-spil"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor-community/keep-awake": "^8.0.1",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/screen-orientation": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.3",
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.2.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.0"
+  }
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Gravko-pladsen</string>
+    <string name="title_activity_main">Gravko-pladsen</string>
+    <string name="package_name">dk.werktoej.gravkospil</string>
+    <string name="custom_url_scheme">dk.werktoej.gravkospil</string>
+</resources>

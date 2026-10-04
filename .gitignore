@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+
+# Playwright
+test-results/
+playwright-report/
+
+# Android signing material. The keystore is the app's identity for its whole life —
+# committing it hands anyone who clones the repo the ability to ship as this app.
+*.jks
+*.keystore
+keystore.properties
+android/local.properties
