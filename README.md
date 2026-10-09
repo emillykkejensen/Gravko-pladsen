@@ -21,8 +21,9 @@ Every building goes through the same four stages, and each needs its own machine
 | Mal huset | — | picks a colour, then *Flyt ind!* | `CraneScene` |
 
 Before a machine can do its first job it has to be **built** in the workshop — each part
-dragged from the floor onto a pale silhouette of the finished machine, bottom-up (a cab
-needs a chassis to sit on) — and then **made ready**:
+dragged from the floor onto a pale silhouette of the finished machine, in any order. Picking
+a part up lights a big patch around where it goes, and letting go anywhere in that patch
+snaps it on — and then **made ready**:
 
 | | Gravko | Lastbil | Betonbil | Kran |
 | --- | --- | --- | --- | --- |
@@ -46,8 +47,20 @@ A five-year-old should never have to work out what comes next. `GameState.nextSt
 answers it — build this machine, fill that one up, go to work — and the town's signpost,
 the button a finished machine leaves behind and the button a finished stage leaves behind
 all route through it (`helpers/Route.ts`). Following the big button walks the whole game in
-order. Nothing stops a child building the crane first, though: the workshop lets any machine
-be worked on at any time; the signpost just points.
+order.
+
+On the first building the workshop only opens a machine once the site has a job for it
+(`GameState.isUnlocked()`): the excavator first, the truck once the hole is dug, and so on.
+The others show as grey cards with a padlock. A built machine stays open, and from the
+second building on all of them are.
+
+### Follow the orange arrow
+
+Every screen has one big bouncing orange arrow (`ui/Guide.ts`) pointing at the next thing to
+touch — the part to pick up, the filler cap to hold the nozzle on, the grease nipple, the
+next chunk of earth — and wherever something has to be dropped or held glows yellow with a
+white outline: the heap behind the excavator, the next section of formwork, the place the
+steel frame goes. A child who cannot read the hint line can still play the whole game.
 
 ### Stars
 
@@ -125,10 +138,11 @@ src/
   ui/
     Chrome.ts            back button, star counter, scene titles
     StageDone.ts         the "Videre!" button a finished stage leaves behind
+    Guide.ts             the orange pointing arrow, glowing drop zones, the hint banner
 tests/
   game.ts                canvas-driving harness: taps, drags, holds, named-object lookup
   smoke.spec.ts          every screen draws on a realistic save
-  assemble.spec.ts       building machines, the bottom-up rule, parts that miss
+  assemble.spec.ts       building machines in any order, rough drops, locked machines
   prepare.spec.ts        filling tanks by holding, each machine's third job
   site.spec.ts           each stage's mechanics, fuel use, and the signpost's order
   state.spec.ts          reloads, damaged saves, starting over, a full town

@@ -24,8 +24,8 @@ export interface Pt { x: number; y: number }
 export interface Style { ghost: boolean }
 
 const REAL: Style = { ghost: false };
-const GHOST_FILL = 0.17;
-const GHOST_LINE = 0.32;
+const GHOST_FILL = 0.22;
+const GHOST_LINE = 0.45;
 
 function fill(g: Phaser.GameObjects.Graphics, s: Style, color: number, alpha = 1): void {
   if (s.ghost) g.fillStyle(COLORS.outline, GHOST_FILL);

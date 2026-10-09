@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS, INK, SIZE, text } from '../config';
+import { COLORS, SIZE } from '../config';
 import { gameState } from '../state/GameState';
 import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
 import { button, caption } from '../helpers/Draw';
@@ -11,6 +11,7 @@ import {
   GRAVEL_DEPTH, GROUND_Y, HoleBox, drawGravelLayer, drawGround, drawHole, holeFor, siteSky, siteWeather,
 } from '../objects/SiteArt';
 import { stageDoneButton } from '../ui/StageDone';
+import { Pointer, hintBanner } from '../ui/Guide';
 import { BaseScene } from './BaseScene';
 
 const S = 0.8;
@@ -18,6 +19,10 @@ const START_X = 190;
 const HOLE_CX = 640;
 
 type Phase = 'reverse' | 'parked' | 'tipping' | 'leaving' | 'done';
+
+/** How close to the stop sign counts as there: the truck rolls the last bit itself. */
+const PARK_SLACK = 60;
+const TIP_Y = 490;
 
 /**
  * Laying gravel in the bottom of the hole.
@@ -55,8 +60,8 @@ export class GravelScene extends BaseScene {
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (this.phase !== 'reverse') return;
-      // anywhere on the truck picks it up
-      if (Math.abs(p.x - this.x) < 150 && p.y > GROUND_Y - 150 && p.y < GROUND_Y + 10) {
+      // anywhere on or around the truck picks it up
+      if (Math.abs(p.x - this.x) < 190 && p.y > GROUND_Y - 190 && p.y < GROUND_Y + 60) {
         this.grab = p.x - this.x;
       }
     });
@@ -117,9 +122,9 @@ export class GravelScene extends BaseScene {
     this.dyn(caption(this, this.scale.width - 120, 96,
       `Læs ${Math.min(gameState.site.gravel + 1, p.gravelLoads)} af ${p.gravelLoads}`));
 
-    const hint = this.phase === 'reverse' ? 'Træk lastbilen baglæns hen til hullet'
-      : this.phase === 'parked' ? 'Tip gruset af!' : '';
-    this.dyn(this.add.text(this.scale.width / 2, 96, hint, text(SIZE.body, INK, 'bold')).setOrigin(0.5));
+    const hint = this.phase === 'reverse' ? 'Træk lastbilen hen til hullet'
+      : this.phase === 'parked' ? 'Tryk på Tip!' : '';
+    this.dyn(hintBanner(this, this.scale.width / 2 - 40, 96, hint));
 
     // the truck, facing away from the hole so its bed tips into it
     const truck = this.dyn(this.add.graphics().setName('truck'));
@@ -150,18 +155,31 @@ export class GravelScene extends BaseScene {
     });
 
     if (this.phase === 'parked') {
-      const tip = button(this, this.x - 60, 490, 'Tip!', COLORS.orange, () => this.tip(), 150, 56, SIZE.heading);
+      const tip = button(this, this.x - 60, TIP_Y, 'Tip!', COLORS.orange, () => this.tip(), 150, 56, SIZE.heading);
       tip.setName('tip');
       this.dyn(tip);
       popIn(this, tip, 0, 0.6);
     }
 
     if (this.phase === 'done') stageDoneButton(this, o => this.dyn(o));
+
+    // reversing: the arrow points the way to drive, just past the back of the truck;
+    // parked: it points at the button
+    const pointer = new Pointer(this, o => this.dyn(o));
+    this.everyFrame(() => {
+      if (this.phase === 'reverse' && this.grab === null) {
+        pointer.point(Math.min(this.x + 150, this.stopX + 60), GROUND_Y - 150, 'right');
+      } else if (this.phase === 'parked') {
+        pointer.point(this.x - 60, TIP_Y - 34);
+      } else {
+        pointer.hide();
+      }
+    });
   }
 
   private moveTo(x: number): void {
     this.x = Phaser.Math.Clamp(x, 100, this.stopX);
-    if (this.x >= this.stopX - 6) {
+    if (this.x >= this.stopX - PARK_SLACK) {
       this.x = this.stopX;
       this.grab = null;
       this.phase = 'parked';

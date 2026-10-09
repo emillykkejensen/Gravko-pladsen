@@ -24,7 +24,8 @@ test('the town has an on-screen way back to the title screen', async ({ page }) 
 
 const SCREENS: [string, Record<string, unknown>, object?][] = [
   ['GarageScene', {}],
-  ['AssembleScene', {}, { machine: 'kran' }],
+  ['AssembleScene', {}, { machine: 'gravko' }],
+  ['AssembleScene', readySave({ stage: 3 }, { machines: {} }), { machine: 'kran' }],
   ['PrepScene', readySave(), { machine: 'betonbil' }],
   ['DigScene', readySave({ stage: 0, dug: [0] })],
   ['GravelScene', readySave({ stage: 1 })],

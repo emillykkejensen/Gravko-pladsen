@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS, INK, PAINT, SIZE, text } from '../config';
+import { COLORS, PAINT, SIZE } from '../config';
 import { gameState } from '../state/GameState';
 import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
 import { button, caption, shade, tappable } from '../helpers/Draw';
@@ -11,6 +11,7 @@ import {
   CELL_W, FLOOR_H, GRAVEL_DEPTH, GROUND_Y, SLAB_H, drawBuilding, drawBuildingFrame, drawFoundation,
   drawFrame, drawGravelLayer, drawGround, drawHole, drawRoofFrame, holeFor, roofHeight, siteSky, siteWeather,
 } from '../objects/SiteArt';
+import { Pointer, drawTargetZone, hintBanner } from '../ui/Guide';
 import { BaseScene } from './BaseScene';
 
 const S = 0.75;
@@ -18,8 +19,9 @@ const CRANE_X = 170;
 const HOLE_CX = 540;
 const PILE = { x: 800, y: GROUND_Y - 10 };
 const PILE_SCALE = 0.42;
-/** How close to its place a frame has to be let go. */
-const SNAP = 50;
+/** How close to its place a frame has to be let go. Generous, for small hands. */
+const SNAP = 110;
+const GO = { x: 690, y: 500 };
 
 /**
  * Raising the steel frame, then painting the building.
@@ -130,6 +132,8 @@ export class CraneScene extends BaseScene {
     }
     const p = gameState.currentProject;
 
+    // where the piece in hand goes glows, under the frame
+    const zone = this.dyn(this.add.graphics());
     const frame = this.dyn(this.add.graphics().setPosition(HOLE_CX, this.base));
     drawBuildingFrame(frame, p, gameState.site.placed);
 
@@ -146,9 +150,8 @@ export class CraneScene extends BaseScene {
     this.piece = { ...pileTop };
 
     this.dyn(caption(this, this.scale.width - 120, 96, `${gameState.site.placed} af ${p.floors + 1}`));
-    this.dyn(this.add.text(this.scale.width / 2, 96,
-      this.nextIsRoof() ? 'Løft taget op på huset' : 'Træk stålet hen med kranen',
-      text(SIZE.body, INK, 'bold')).setOrigin(0.5));
+    this.dyn(hintBanner(this, this.scale.width / 2 - 20, 96,
+      this.nextIsRoof() ? 'Løft taget op på huset' : 'Træk stålet hen på huset'));
 
     const crane = this.dyn(this.add.graphics().setPosition(CRANE_X, GROUND_Y).setScale(S));
     const load = this.dyn(this.add.container(pileTop.x, pileTop.y)).setName('piece').setScale(PILE_SCALE);
@@ -167,6 +170,19 @@ export class CraneScene extends BaseScene {
     if (!reduceMotion()) {
       this.tweens.add({ targets: load, y: pileTop.y - 5, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
+
+    const pointer = new Pointer(this, o => this.dyn(o));
+    this.everyFrame(() => {
+      zone.clear();
+      if (this.dragging) {
+        const slot = this.slot();
+        const h = this.pieceHeight();
+        drawTargetZone(zone, this, slot.x - this.width / 2 - 20, slot.y - h / 2 - 16, this.width + 40, h + 32);
+        pointer.point(slot.x, slot.y - h / 2 - 18);
+      } else {
+        pointer.point(load.x, load.y - 30);
+      }
+    });
 
     this.everyFrame(() => {
       // the hook is over the load while it is lifted, and resting otherwise
@@ -243,9 +259,8 @@ export class CraneScene extends BaseScene {
     if (this.paint === null) drawBuildingFrame(house, p, p.floors + 1, false);
     else drawBuilding(house, p, this.paint);
 
-    this.dyn(this.add.text(this.scale.width / 2, 96,
-      this.paint === null ? 'Vælg en farve til huset' : 'Flot! Prøv en anden — eller flyt ind',
-      text(SIZE.body, INK, 'bold')).setOrigin(0.5));
+    this.dyn(hintBanner(this, this.scale.width / 2 - 20, 96,
+      this.paint === null ? 'Vælg en farve til huset' : 'Flot! Tryk på Flyt ind!'));
 
     // paint pots along the bottom
     PAINT.forEach((paint, i) => {
@@ -278,11 +293,17 @@ export class CraneScene extends BaseScene {
     });
 
     if (this.paint !== null) {
-      const done = button(this, 690, 500, 'Flyt ind!', COLORS.green, () => this.moveIn(), 200, 56, SIZE.heading);
+      const done = button(this, GO.x, GO.y, 'Flyt ind!', COLORS.green, () => this.moveIn(), 200, 56, SIZE.heading);
       done.setName('go');
       this.dyn(done);
       popIn(this, done, 100, 0.6);
     }
+
+    // first the paint pots, then the button
+    const pointer = new Pointer(this, o => this.dyn(o));
+    if (this.paint === null) pointer.point(90 + 2.5 * 74, 476);
+    else pointer.point(GO.x, GO.y - 34);
+    this.everyFrame(() => pointer.tick());
   }
 
   private moveIn(): void {

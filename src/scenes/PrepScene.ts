@@ -12,10 +12,11 @@ import {
 } from '../objects/FeedbackEffects';
 import { SERVICE, drawMachine, machineBounds } from '../objects/MachineArt';
 import { FLOOR_Y, workshopBackdrop } from '../objects/SiteArt';
+import { Pointer, drawTargetZone } from '../ui/Guide';
 import { BaseScene } from './BaseScene';
 
-/** How close the nozzle has to be to the filler cap to pour. */
-const REACH = 44;
+/** How close the nozzle has to be to the filler cap to pour. Generous, for small hands. */
+const REACH = 70;
 /** Tank per second while pouring. */
 const DIESEL_RATE = 0.45;
 const OIL_RATE = 0.6;
@@ -23,6 +24,7 @@ const OIL_RATE = 0.6;
 const PUMP = { x: 70, top: 214 };
 const NOZZLE_HOME = { x: 132, y: 286 };
 const CAN_HOME = { x: 188, y: 406 };
+const GO = { x: 640, y: 500 };
 
 type Tool = 'diesel' | 'oil';
 
@@ -98,11 +100,56 @@ export class PrepScene extends BaseScene {
     drawMachine(m, this.machine);
 
     this.buildChecklist();
+    const zone = this.dyn(this.add.graphics());
     this.buildCaps();
     this.buildExtraSpots();
     this.buildTools();
 
     if (gameState.isReady(this.machine)) this.buildGo();
+    this.buildPointer(zone);
+  }
+
+  /* --------------------------------------------------------------- guidance --- */
+
+  /**
+   * One job at a time, shown with the arrow: pick up the nozzle, hold it on the glowing
+   * cap; then the oil; then the machine's own job, spot by spot; then the button. The
+   * tools and spots were all there before, but small against a busy machine, and a child
+   * could not tell which to start with.
+   */
+  private buildPointer(zone: Phaser.GameObjects.Graphics): void {
+    const pointer = new Pointer(this, o => this.dyn(o));
+    const glow = (p: { x: number; y: number }, r: number) =>
+      drawTargetZone(zone, this, p.x - r, p.y - r, r * 2, r * 2, 'round');
+
+    this.everyFrame(() => {
+      zone.clear();
+      const needs = gameState.needs(this.machine);
+      if (this.dragging) {
+        const cap = this.at(SERVICE[this.machine][this.dragging]);
+        glow(cap, REACH * 0.7);
+        pointer.point(cap.x, cap.y - 18);
+        return;
+      }
+      if (needs.diesel) {
+        glow(this.at(SERVICE[this.machine].diesel), 26);
+        pointer.point(NOZZLE_HOME.x, NOZZLE_HOME.y - 18);
+        return;
+      }
+      if (needs.oil) {
+        glow(this.at(SERVICE[this.machine].oil), 26);
+        pointer.point(CAN_HOME.x - 10, CAN_HOME.y - 50);
+        return;
+      }
+      const spot = gameState.machines[this.machine].extra.findIndex(done => !done);
+      if (spot >= 0) {
+        const p = this.at(SERVICE[this.machine].extra[spot]);
+        pointer.point(p.x, p.y - 26);
+        return;
+      }
+      if (gameState.isReady(this.machine)) pointer.point(GO.x, GO.y - 34);
+      else pointer.hide();
+    });
   }
 
   /* ------------------------------------------------------------- checklist --- */
@@ -168,15 +215,15 @@ export class PrepScene extends BaseScene {
       const c = this.dyn(this.add.container(p.x, p.y)).setName(`cap:${tool}`);
       const g = this.add.graphics();
       g.fillStyle(COLORS.outline);
-      g.fillCircle(0, 0, 11);
+      g.fillCircle(0, 0, 15);
       g.fillStyle(color);
-      g.fillCircle(0, 0, 9);
+      g.fillCircle(0, 0, 12.5);
       g.fillStyle(COLORS.white, 0.4);
-      g.fillCircle(-3, -3, 3.5);
+      g.fillCircle(-4, -4, 4.5);
       c.add(g);
       // a ring that pulses on the cap that still wants filling
       if ((tool === 'diesel' ? needs.diesel : needs.oil) || m[tool] < 1) {
-        const ring = this.add.circle(0, 0, 16).setStrokeStyle(3, color, 0.9);
+        const ring = this.add.circle(0, 0, 20).setStrokeStyle(4, color, 0.95);
         c.add(ring);
         if (!reduceMotion()) {
           this.tweens.add({ targets: ring, scale: 1.6, alpha: 0, duration: 900, repeat: -1 });
@@ -204,13 +251,18 @@ export class PrepScene extends BaseScene {
         }
         return;
       }
+      // a bright halo behind the spot, so it stands out against the machine's yellow
+      const halo = this.add.circle(0, 0, 23, COLORS.white, 0.85).setStrokeStyle(4, COLORS.outline, 0.9);
+      c.add(halo);
+      c.sendToBack(halo);
+      g.setScale(1.2);
       this.drawExtraIcon(g, def.extra.kind);
-      const ring = this.add.circle(0, 0, 22).setStrokeStyle(3, COLORS.blue, 0.9);
+      const ring = this.add.circle(0, 0, 27).setStrokeStyle(5, COLORS.orange, 1);
       c.add(ring);
       if (!reduceMotion()) {
-        this.tweens.add({ targets: ring, scale: 1.4, alpha: 0.2, duration: 700, yoyo: true, repeat: -1 });
+        this.tweens.add({ targets: ring, scale: 1.35, alpha: 0.25, duration: 700, yoyo: true, repeat: -1 });
       }
-      tappable(this, c, 54, 54, () => this.doExtra(i, p), 'tap');
+      tappable(this, c, 76, 76, () => this.doExtra(i, p), 'tap');
     });
   }
 
@@ -431,7 +483,7 @@ export class PrepScene extends BaseScene {
   private buildGo(): void {
     const route = nextRoute();
     const toSite = gameState.stage.machine === this.machine && route.scene === gameState.stage.scene;
-    const go = button(this, 640, 500, toSite ? 'Kør på arbejde!' : 'Videre!', COLORS.green, () => {
+    const go = button(this, GO.x, GO.y, toSite ? 'Kør på arbejde!' : 'Videre!', COLORS.green, () => {
       audio.horn();
       this.goTo(route.scene, route.data);
     }, 240, 56, SIZE.heading);
