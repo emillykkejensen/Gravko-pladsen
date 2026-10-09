@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS, INK, SIZE, text } from '../config';
+import { COLORS } from '../config';
 import { gameState } from '../state/GameState';
 import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
 import { caption, progressBar } from '../helpers/Draw';
@@ -12,6 +12,7 @@ import {
   holeFor, siteSky, siteWeather,
 } from '../objects/SiteArt';
 import { stageDoneButton } from '../ui/StageDone';
+import { Pointer, drawTargetZone, hintBanner } from '../ui/Guide';
 import { BaseScene } from './BaseScene';
 
 const S = 0.8;
@@ -119,6 +120,8 @@ export class PourScene extends BaseScene {
     const cells = gameState.currentProject.pourCells;
     const fills = () => Array.from({ length: cells }, (_, i) => gameState.site.poured[i] ?? 0);
 
+    // the section of formwork that wants concrete next glows
+    const zone = this.dyn(this.add.graphics());
     const slab = this.dyn(this.add.graphics());
     const drawSlab = () => {
       slab.clear();
@@ -129,14 +132,29 @@ export class PourScene extends BaseScene {
     const filled = fills().filter(f => f >= 1).length;
     this.dyn(caption(this, this.scale.width - 120, 96, `${filled} af ${cells}`, filled >= cells ? 'done' : 'idle'));
 
-    const hint = this.phase === 'pouring' ? 'Hold fingeren over forskallingen'
+    const hint = this.phase === 'pouring' ? 'Hold fingeren på det gule felt'
       : this.phase === 'drying' ? 'Solen tørrer betonen ...' : '';
-    this.dyn(this.add.text(this.scale.width / 2 - 60, 96, hint, text(SIZE.body, INK, 'bold')).setOrigin(0.5));
+    this.dyn(hintBanner(this, this.scale.width / 2 - 60, 96, hint));
 
     const truck = this.dyn(this.add.graphics().setPosition(TRUCK_X, GROUND_Y).setScale(S));
     const stream = this.dyn(this.add.graphics());
 
     let dryBar: Phaser.GameObjects.Container | null = null;
+
+    const pointer = new Pointer(this, o => this.dyn(o));
+    this.everyFrame(() => {
+      zone.clear();
+      const next = this.phase === 'pouring' ? fills().findIndex(f => f < 1) : -1;
+      if (next < 0) {
+        pointer.hide();
+        return;
+      }
+      const x = this.slabX + next * CELL_W;
+      drawTargetZone(zone, this, x - 4, this.slabTop - 30, CELL_W + 8, SLAB_H + 36);
+      // the arrow stands aside while concrete is running, so it does not hide the stream
+      if (this.holding) pointer.hide();
+      else pointer.point(x + CELL_W / 2, this.slabTop - 34);
+    });
 
     this.everyFrame(dt => {
       // the chute swings towards the finger

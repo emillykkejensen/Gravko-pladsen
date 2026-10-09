@@ -9,14 +9,14 @@ export type MachineId = 'gravko' | 'lastbil' | 'betonbil' | 'kran';
 
 export const MACHINE_IDS: MachineId[] = ['gravko', 'lastbil', 'betonbil', 'kran'];
 
+/**
+ * One part. Parts go on in any order — a five-year-old should not have to work out that
+ * the cab needs a chassis first, so a cab dropped onto an empty silhouette simply waits
+ * there for the rest of the machine to arrive.
+ */
 export interface PartDef {
   id: string;
   name: string;
-  /**
-   * Parts that have to be on the machine first. A cab cannot sit on a chassis that is not
-   * there yet; the part still drags, it just will not snap until its base is in place.
-   */
-  needs: string[];
 }
 
 /** The third preparation job — the one that is different for each machine. */
@@ -48,12 +48,12 @@ export const MACHINES: Record<MachineId, MachineDef> = {
     short: 'Gravko',
     job: 'graver hullet',
     parts: [
-      { id: 'baelter', name: 'Bælter', needs: [] },
-      { id: 'krop', name: 'Krop', needs: ['baelter'] },
-      { id: 'hus', name: 'Førerhus', needs: ['krop'] },
-      { id: 'bom', name: 'Bom', needs: ['krop'] },
-      { id: 'arm', name: 'Arm', needs: ['bom'] },
-      { id: 'skovl', name: 'Skovl', needs: ['arm'] },
+      { id: 'baelter', name: 'Bælter' },
+      { id: 'krop', name: 'Krop' },
+      { id: 'hus', name: 'Førerhus' },
+      { id: 'bom', name: 'Bom' },
+      { id: 'arm', name: 'Arm' },
+      { id: 'skovl', name: 'Skovl' },
     ],
     extra: { title: 'Smør leddene', kind: 'grease', done: 'Smurt' },
   },
@@ -63,10 +63,10 @@ export const MACHINES: Record<MachineId, MachineDef> = {
     short: 'Lastbil',
     job: 'kører grus',
     parts: [
-      { id: 'hjul', name: 'Hjul', needs: [] },
-      { id: 'ramme', name: 'Ramme', needs: ['hjul'] },
-      { id: 'hus', name: 'Førerhus', needs: ['ramme'] },
-      { id: 'lad', name: 'Lad', needs: ['ramme'] },
+      { id: 'hjul', name: 'Hjul' },
+      { id: 'ramme', name: 'Ramme' },
+      { id: 'hus', name: 'Førerhus' },
+      { id: 'lad', name: 'Lad' },
     ],
     extra: { title: 'Pump dækkene', kind: 'tyre', done: 'Pumpet' },
   },
@@ -76,11 +76,11 @@ export const MACHINES: Record<MachineId, MachineDef> = {
     short: 'Betonbil',
     job: 'støber fundamentet',
     parts: [
-      { id: 'hjul', name: 'Hjul', needs: [] },
-      { id: 'ramme', name: 'Ramme', needs: ['hjul'] },
-      { id: 'hus', name: 'Førerhus', needs: ['ramme'] },
-      { id: 'tromle', name: 'Tromle', needs: ['ramme'] },
-      { id: 'rende', name: 'Rende', needs: ['tromle'] },
+      { id: 'hjul', name: 'Hjul' },
+      { id: 'ramme', name: 'Ramme' },
+      { id: 'hus', name: 'Førerhus' },
+      { id: 'tromle', name: 'Tromle' },
+      { id: 'rende', name: 'Rende' },
     ],
     extra: { title: 'Vask tromlen', kind: 'mud', done: 'Ren' },
   },
@@ -90,12 +90,12 @@ export const MACHINES: Record<MachineId, MachineDef> = {
     short: 'Kran',
     job: 'løfter stålet på plads',
     parts: [
-      { id: 'hjul', name: 'Hjul', needs: [] },
-      { id: 'ramme', name: 'Ramme', needs: ['hjul'] },
-      { id: 'hus', name: 'Førerhus', needs: ['ramme'] },
-      { id: 'drej', name: 'Drejeskive', needs: ['ramme'] },
-      { id: 'bom', name: 'Kranarm', needs: ['drej'] },
-      { id: 'krog', name: 'Krog', needs: ['bom'] },
+      { id: 'hjul', name: 'Hjul' },
+      { id: 'ramme', name: 'Ramme' },
+      { id: 'hus', name: 'Førerhus' },
+      { id: 'drej', name: 'Drejeskive' },
+      { id: 'bom', name: 'Kranarm' },
+      { id: 'krog', name: 'Krog' },
     ],
     extra: { title: 'Spænd boltene', kind: 'bolt', done: 'Spændt' },
   },

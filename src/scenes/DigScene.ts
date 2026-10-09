@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS, INK, SIZE, text } from '../config';
+import { COLORS } from '../config';
 import { gameState } from '../state/GameState';
 import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
 import { caption } from '../helpers/Draw';
@@ -9,6 +9,7 @@ import { showConfetti, showPraise } from '../objects/FeedbackEffects';
 import { ArmPose, GRAVKO_REST, Pt, drawMachine } from '../objects/MachineArt';
 import { GROUND_Y, drawGround, drawHole, siteSky, siteWeather } from '../objects/SiteArt';
 import { stageDoneButton } from '../ui/StageDone';
+import { Pointer, drawTargetZone, hintBanner } from '../ui/Guide';
 import { BaseScene } from './BaseScene';
 
 const S = 0.8;
@@ -27,7 +28,9 @@ const HOLE_X = 342;
 
 /** The spoil heap behind the excavator. */
 const HEAP_X = 70;
-const DUMP_RIGHT = 160;
+/** A full bucket anywhere left of this, above the ground, empties onto the heap. */
+const DUMP_RIGHT = 170;
+const DUMP_TOP = GROUND_Y - 190;
 
 /**
  * Digging the hole.
@@ -171,15 +174,20 @@ export class DigScene extends BaseScene {
     };
     drawHeap();
 
+    // where a full bucket goes: the whole patch over the heap glows
+    const zone = this.dyn(this.add.graphics());
+
     // the machine: tracks stay put, the upper body turns round
     const tracks = this.dyn(this.add.graphics().setPosition(BASE_X, GROUND_Y).setScale(S));
     drawMachine(tracks, 'gravko', ['baelter']);
     const upper = this.dyn(this.add.graphics().setPosition(BASE_X, GROUND_Y).setScale(S));
 
-    const hint = this.dyn(this.add.text(this.scale.width / 2, 96, '', text(SIZE.body, INK, 'bold')).setOrigin(0.5));
-    const setHint = () => hint.setText(
-      this.finished ? '' : this.carried > 0 ? 'Tøm skovlen på jordbunken' : 'Træk skovlen ned i jorden'
-    );
+    let hint: Phaser.GameObjects.Container | null = null;
+    const setHint = () => {
+      hint?.destroy();
+      hint = this.dyn(hintBanner(this, this.scale.width / 2 - 40, 96,
+        this.finished ? '' : this.carried > 0 ? 'Tøm skovlen på jordbunken' : 'Grav jord op af hullet'));
+    };
     setHint();
 
     let progress = this.dyn(caption(this, this.scale.width - 120, 96,
@@ -211,7 +219,20 @@ export class DigScene extends BaseScene {
       upper.clear();
       drawMachine(upper, 'gravko', ['bom', 'arm', 'skovl', 'krop', 'hus'], { arm: pose });
 
-      if (this.finished) return;
+      zone.clear();
+      if (this.finished) {
+        pointer.hide();
+        return;
+      }
+      if (this.carried > 0) {
+        drawTargetZone(zone, this, 12, DUMP_TOP, DUMP_RIGHT - 12, GROUND_Y - 6 - DUMP_TOP);
+        pointer.point(HEAP_X + 10, GROUND_Y - 70);
+      } else {
+        const next = this.nextChunk();
+        if (next) pointer.point(next.x, next.y);
+        else pointer.hide();
+      }
+
       const tip = this.tipOnScreen(pose);
       if (this.carried === 0) {
         const chunk = this.chunkAt(tip);
@@ -233,6 +254,22 @@ export class DigScene extends BaseScene {
         if (gameState.holeDug) this.finish();
       }
     });
+
+    // last, so it draws over the excavator's arm
+    const pointer = new Pointer(this, o => this.dyn(o));
+  }
+
+  /** The top of the next chunk the bucket can reach, on screen — where the arrow points. */
+  private nextChunk(): Pt | null {
+    const p = gameState.currentProject;
+    for (let col = 0; col < p.holeCols; col++) {
+      for (let layer = 0; layer < p.holeRows; layer++) {
+        if (gameState.canDig(col * p.holeRows + layer)) {
+          return { x: this.hole.x + (col + 0.5) * CHUNK_W, y: this.hole.y + layer * CHUNK_H + 4 };
+        }
+      }
+    }
+    return null;
   }
 
   /** Two-bone IK: the elbow that puts the wrist where it should be, bending upward. */

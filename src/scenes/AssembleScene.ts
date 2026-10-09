@@ -1,20 +1,23 @@
 import Phaser from 'phaser';
-import { COLORS, DEPTH, INK_SOFT, SIZE, text } from '../config';
+import { COLORS, DEPTH, SIZE } from '../config';
 import { gameState } from '../state/GameState';
 import { MACHINES, MachineId } from '../state/Machines';
 import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
 import { button, caption, plate } from '../helpers/Draw';
 import { dur, popIn, reduceMotion } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
-import {
-  showConfetti, showPraise, showRing, showSparkle, showToast,
-} from '../objects/FeedbackEffects';
+import { showConfetti, showPraise, showRing, showSparkle } from '../objects/FeedbackEffects';
 import { ART, drawMachine, drawMachineProgress, machineBounds, partGraphic } from '../objects/MachineArt';
 import { FLOOR_Y, workshopBackdrop } from '../objects/SiteArt';
+import { Pointer, drawTargetZone, hintBanner } from '../ui/Guide';
 import { BaseScene } from './BaseScene';
 
-/** How close to its place a part has to be let go for it to snap on. */
-const SNAP = 70;
+/**
+ * How close to its place a part has to be let go for it to snap on, at the least. Bigger
+ * parts get more on top (see `snapRadius`). Generous on purpose: a small hand dragging on
+ * a phone lands a part roughly where it goes, and roughly is good enough.
+ */
+const SNAP = 120;
 
 /** Where the parts lie on the floor. */
 const PILE_Y = 498;
@@ -30,9 +33,10 @@ interface Drag {
  * Building a machine: drag each part from the floor to where it goes.
  *
  * The finished machine is drawn as a pale silhouette, so the child can see the shape they
- * are building before it exists. Parts go on bottom-up — a cab needs something to sit on —
- * and the places that can take a part right now pulse. A part let go in the wrong place,
- * or before what it sits on, slides back to the floor: nothing breaks, nothing is lost.
+ * are building before it exists. Parts go on in any order, and every empty place pulses.
+ * Picking a part up lights up the big patch it snaps to; let go anywhere in that patch and
+ * it clicks on. A part let go far away slides back to the floor: nothing breaks, nothing
+ * is lost.
  */
 export class AssembleScene extends BaseScene {
   private machine: MachineId = 'gravko';
@@ -50,6 +54,12 @@ export class AssembleScene extends BaseScene {
   }
 
   create(): void {
+    // The workshop only offers machines the site has a job for; a stale route or the
+    // back button must not open one that is still locked.
+    if (!gameState.isUnlocked(this.machine)) {
+      this.scene.start('GarageScene');
+      return;
+    }
     // Fit the machine into the space above the floor, a little right of centre.
     const b = machineBounds(this.machine);
     this.scaleM = Math.min(1, 540 / b.w, 280 / b.h);
@@ -91,15 +101,24 @@ export class AssembleScene extends BaseScene {
     return { x: this.origin.x + c.x * this.scaleM, y: this.origin.y + c.y * this.scaleM };
   }
 
+  /** How far from its place a part can be let go and still snap on. */
+  private snapRadius(part: string): number {
+    const { w, h } = ART[this.machine][part].size;
+    return Math.max(SNAP, Math.max(w, h) * this.scaleM * 0.5 + 60);
+  }
+
   protected buildDynamic(): void {
     const def = MACHINES[this.machine];
     const placed = gameState.machines[this.machine].parts;
+
+    // the patch the part in hand snaps to, under everything else
+    const zone = this.dyn(this.add.graphics());
 
     // silhouette plus whatever is already on
     const m = this.dyn(this.add.graphics().setPosition(this.origin.x, this.origin.y).setScale(this.scaleM));
     drawMachineProgress(m, this.machine, placed);
 
-    // the places that can take a part right now
+    // every place still waiting for its part
     for (const part of def.parts) {
       if (!gameState.canPlace(this.machine, part.id)) continue;
       const t = this.target(part.id);
@@ -129,9 +148,24 @@ export class AssembleScene extends BaseScene {
       c.on('pointerdown', (p: Phaser.Input.Pointer) => this.pickUp(part.id, c, p));
     });
 
-    const left = loose.length;
-    this.dyn(this.add.text(this.scale.width / 2, 92, `Træk delene op på plads — ${left} tilbage`,
-      text(SIZE.body, INK_SOFT, 'bold')).setOrigin(0.5));
+    this.dyn(hintBanner(this, this.scale.width / 2, 96, 'Træk delene op på maskinen'));
+
+    // Nothing in hand: the arrow points at a part on the floor. A part in hand: the arrow
+    // points at where it goes, and that place glows.
+    const firstLoose = this.dynamic.getByName(`part:${loose[0].id}`) as Phaser.GameObjects.Container;
+    const pointer = new Pointer(this, o => this.dyn(o));
+    this.everyFrame(() => {
+      zone.clear();
+      if (this.drag) {
+        const t = this.target(this.drag.part);
+        const r = this.snapRadius(this.drag.part);
+        drawTargetZone(zone, this, t.x - r, t.y - r * 0.8, r * 2, r * 1.6, 'round');
+        const art = ART[this.machine][this.drag.part];
+        pointer.point(t.x, t.y - (art.size.h * this.scaleM) / 2 - 6);
+      } else {
+        pointer.point(firstLoose.x, PILE_Y - 52);
+      }
+    });
   }
 
   private pickUp(part: string, c: Phaser.GameObjects.Container, p: Phaser.Input.Pointer): void {
@@ -149,8 +183,9 @@ export class AssembleScene extends BaseScene {
     this.drag = null;
 
     const t = this.target(drag.part);
-    const near = Phaser.Math.Distance.Between(drag.c.x, drag.c.y, t.x, t.y) < SNAP
-      || Phaser.Math.Distance.Between(x, y, t.x, t.y) < SNAP;
+    const r = this.snapRadius(drag.part);
+    const near = Phaser.Math.Distance.Between(drag.c.x, drag.c.y, t.x, t.y) < r
+      || Phaser.Math.Distance.Between(x, y, t.x, t.y) < r;
 
     if (near && gameState.placePart(this.machine, drag.part)) {
       drag.c.setPosition(t.x, t.y).setScale(this.scaleM);
@@ -164,14 +199,6 @@ export class AssembleScene extends BaseScene {
       }
       this.refresh();
       return;
-    }
-
-    if (near) {
-      // right place, wrong moment: say what has to go on first
-      const def = MACHINES[this.machine].parts.find(p => p.id === drag.part)!;
-      const missing = def.needs.find(n => !gameState.hasPart(this.machine, n));
-      const name = MACHINES[this.machine].parts.find(p => p.id === missing)?.name;
-      if (name) showToast(this, t.x, t.y - 60, `Først: ${name.toLowerCase()}`);
     }
 
     audio.thud();

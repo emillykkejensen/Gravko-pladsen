@@ -10,7 +10,7 @@ import { ProjectDef, STAGES, StageDef, TOWN_PLOTS, projectAt } from './Projects'
  * Mutators that stand for a one-time achievement return a boolean, so a scene can pay a
  * star only on the transition and never on a repeated tap:
  *
- *   if (!gameState.placePart('gravko', 'bom')) return;   // already on, or nothing to sit on
+ *   if (!gameState.placePart('gravko', 'bom')) return;   // already on, or machine still locked
  *   award(this);
  */
 
@@ -106,11 +106,24 @@ class GameState {
     return this.machines[id].parts.includes(part);
   }
 
-  /** Whether a part may snap on now: not already on, and whatever it sits on is. */
+  /**
+   * Whether a machine can be worked on in the workshop yet.
+   *
+   * On the first building the machines unlock one at a time, as the site needs them: the
+   * excavator first, the truck once the hole is dug, and so on. Four silhouettes to choose
+   * from when only one of them has a job to do just confused a five-year-old. A machine
+   * that is already built stays open, and from the second building on all of them are.
+   */
+  isUnlocked(id: MachineId): boolean {
+    if (this.project > 0 || this.isBuilt(id)) return true;
+    const first = STAGES.findIndex(s => s.machine === id);
+    return first >= 0 && first <= this.site.stage;
+  }
+
+  /** Whether a part may snap on now: the machine is open, and the part is not on yet. */
   canPlace(id: MachineId, part: string): boolean {
-    const def = MACHINES[id].parts.find(p => p.id === part);
-    if (!def || this.hasPart(id, part)) return false;
-    return def.needs.every(n => this.hasPart(id, n));
+    if (!this.isUnlocked(id)) return false;
+    return MACHINES[id].parts.some(p => p.id === part) && !this.hasPart(id, part);
   }
 
   placePart(id: MachineId, part: string): boolean {
