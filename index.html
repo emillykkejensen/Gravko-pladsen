@@ -33,6 +33,16 @@
       overscroll-behavior: none;
       touch-action: manipulation;
     }
+    /*
+     * The game fills the screen; the stage takes its shape (helpers/Stage). The safe-area
+     * insets are padding on the body, not the container, because Phaser measures the
+     * container whole — so nothing tappable lands under a camera cut-out.
+     */
+    body {
+      height: 100dvh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right)
+               env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
     #game-container { width: 100%; height: 100%; }
     canvas { display: block; touch-action: none; }
   </style>

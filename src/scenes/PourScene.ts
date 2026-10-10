@@ -8,8 +8,8 @@ import { audio } from '../helpers/Audio';
 import { showConfetti, showPraise, showSparkle } from '../objects/FeedbackEffects';
 import { CHUTE_ROOT, Pt, drawMachine } from '../objects/MachineArt';
 import {
-  CELL_W, GRAVEL_DEPTH, GROUND_Y, SLAB_H, drawFoundation, drawGravelLayer, drawGround, drawHole,
-  holeFor, siteSky, siteWeather,
+  CELL_W, GRAVEL_DEPTH, SLAB_H, drawFoundation, drawGravelLayer, drawGround, drawHole, drawPilesUnder,
+  groundY, holeFor, siteSky, siteWeather,
 } from '../objects/SiteArt';
 import { stageDoneButton } from '../ui/StageDone';
 import { Pointer, drawTargetZone, hintBanner } from '../ui/Guide';
@@ -64,7 +64,7 @@ export class PourScene extends BaseScene {
     const aim = (p: Phaser.Input.Pointer) => {
       if (!p.isDown || this.phase !== 'pouring') return;
       this.goalX = Phaser.Math.Clamp(p.x, this.slabX + 6, this.chuteRoot.x - 50);
-      this.holding = p.y > 150;
+      this.holding = p.y > 150 + this.dy;
     };
     this.input.on('pointerdown', aim);
     this.input.on('pointermove', aim);
@@ -72,8 +72,13 @@ export class PourScene extends BaseScene {
     this.input.on('gameout', () => { this.holding = false; });
   }
 
+  /* The layout, written for the 880×550 stage and moved to the middle of this one. */
+  private get gy(): number { return groundY(this); }
+  private get truckX(): number { return TRUCK_X + this.dx; }
+  private get holeCX(): number { return HOLE_CX + this.dx; }
+
   private get hole() {
-    return holeFor(gameState.currentProject.pourCells, HOLE_CX);
+    return holeFor(gameState.currentProject.pourCells, this.holeCX, this.gy);
   }
 
   private get slabX(): number {
@@ -86,15 +91,16 @@ export class PourScene extends BaseScene {
   }
 
   private get chuteRoot(): Pt {
-    return { x: TRUCK_X + CHUTE_ROOT.x * S, y: GROUND_Y + CHUTE_ROOT.y * S };
+    return { x: this.truckX + CHUTE_ROOT.x * S, y: this.gy + CHUTE_ROOT.y * S };
   }
 
   protected buildBackground(): void {
     const { width, height } = this.scale;
     siteSky(this, o => this.bg(o));
     const g = this.add.graphics();
-    drawGround(g, width, height);
+    drawGround(g, width, height, this.gy);
     drawHole(g, this.hole);
+    drawPilesUnder(g, this.hole, gameState.currentProject.piles);
     drawGravelLayer(g, this.hole, GRAVEL_DEPTH);
     this.bg(g);
   }
@@ -136,7 +142,7 @@ export class PourScene extends BaseScene {
       : this.phase === 'drying' ? 'Solen tørrer betonen ...' : '';
     this.dyn(hintBanner(this, this.scale.width / 2 - 60, 96, hint));
 
-    const truck = this.dyn(this.add.graphics().setPosition(TRUCK_X, GROUND_Y).setScale(S));
+    const truck = this.dyn(this.add.graphics().setPosition(this.truckX, this.gy).setScale(S));
     const stream = this.dyn(this.add.graphics());
 
     let dryBar: Phaser.GameObjects.Container | null = null;
@@ -161,7 +167,7 @@ export class PourScene extends BaseScene {
       const dx = this.goalX - this.tipX;
       this.tipX += Math.sign(dx) * Math.min(Math.abs(dx), SWING * dt);
       const tip = { x: this.tipX, y: this.slabTop - 34 };
-      const local = { x: (tip.x - TRUCK_X) / S, y: (tip.y - GROUND_Y) / S };
+      const local = { x: (tip.x - this.truckX) / S, y: (tip.y - this.gy) / S };
 
       const pouring = this.phase === 'pouring' && this.holding && Math.abs(dx) < 30;
       this.drum += dt * (pouring ? 4 : 1.2);

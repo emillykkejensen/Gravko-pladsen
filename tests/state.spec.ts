@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { Game, SAVE_KEY, readySave } from './game';
+import { Game, readySave, readyMachine, saveKeyFor } from './game';
 
 /**
  * The save file: what survives a reload, and what a damaged save turns into.
@@ -52,23 +52,53 @@ test('a save from an unknown version starts fresh instead of crashing', async ({
 
 test('"Start forfra" asks twice, then clears everything but the sound settings', async ({ page }) => {
   const game = await Game.openWithSave(page, readySave({ stage: 3 }, {
-    stars: 30, town: [{ project: 0, color: 0 }], settings: { sound: false, music: false },
+    stars: 30, earned: 50, owned: ['bus', 'lak-roed'], livery: 'lak-roed',
+    town: [{ project: 0, color: 0 }], settings: { sound: false, music: false },
   }));
-  await game.goTo('SettingsScene');
+  await game.start();
+  await game.tapNamed('TownScene', 'grownups');
+  await game.waitForScene('SettingsScene');
 
-  await game.tap(440, 466);
+  await game.tapNamed('SettingsScene', 'reset');
   expect((await game.state()).stars, 'the first tap only asks').toBe(30);
-  await game.expectScreenText('SettingsScene').toContain('Ja, slet alt');
+  await game.expectScreenText('SettingsScene').toContain('Ja, start forfra');
 
-  await game.tap(440, 466);
+  await game.tapNamed('SettingsScene', 'reset');
   const s = await game.state();
   expect(s.stars).toBe(0);
+  expect(s.earned).toBe(0);
   expect(s.town).toEqual([]);
+  expect(s.owned).toEqual([]);
+  expect(s.livery).toBe('gul');
   expect(s.machines.gravko.parts).toEqual([]);
   expect(s.settings).toEqual({ sound: false, music: false });
 
-  const raw = await page.evaluate((k) => localStorage.getItem(k), SAVE_KEY);
-  expect(JSON.parse(raw!).stars).toBe(0);
+  expect((await game.storage(saveKeyFor(Game.PLAYER.id))).stars).toBe(0);
+  game.expectNoErrors();
+});
+
+test('a save from before the bigger buildings finds its place in the new stages', async ({ page }) => {
+  // Version 1 counted five stages for every building. The high-rise at its old "rejs" is
+  // now at the tower crane's stage, with the piles and the rolling counted as done.
+  const game = await Game.openWithSave(page, {
+    version: 1,
+    stars: 33,
+    project: 3,
+    machines: { gravko: readyMachine('gravko'), kran: readyMachine('kran') },
+    site: { stage: 3, dug: [], gravel: 2, poured: [1, 1, 1, 1, 1], placed: 1 },
+  });
+  const s = await game.state();
+  expect(s.stage).toBe('taarn');
+  expect(s.site.placed, 'the frames already lifted stay up').toBe(1);
+  expect(s.earned, 'every star in hand was earned').toBe(33);
+  expect(s.next, 'the high-rise needs the tower crane built').toMatchObject({ kind: 'assemble', machine: 'taarnkran' });
+  expect(s.machines.taarnkran.parts).toEqual([]);
+
+  // the villa at its old "stoeb" is past the new rolling stage
+  const villa = await Game.openWithSave(page, {
+    version: 1, project: 1, site: { stage: 2, dug: [], gravel: 2, poured: [], placed: 0 },
+  });
+  expect((await villa.state()).stage).toBe('stoeb');
   game.expectNoErrors();
 });
 

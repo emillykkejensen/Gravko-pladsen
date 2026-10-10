@@ -8,7 +8,7 @@ import { audio } from '../helpers/Audio';
 import { showConfetti, showPraise, showRing } from '../objects/FeedbackEffects';
 import { BED_HINGE, drawMachine } from '../objects/MachineArt';
 import {
-  GRAVEL_DEPTH, GROUND_Y, HoleBox, drawGravelLayer, drawGround, drawHole, holeFor, siteSky, siteWeather,
+  GRAVEL_DEPTH, HoleBox, drawGravelLayer, drawGround, drawHole, drawPilesUnder, groundY, holeFor, siteSky, siteWeather,
 } from '../objects/SiteArt';
 import { stageDoneButton } from '../ui/StageDone';
 import { Pointer, hintBanner } from '../ui/Guide';
@@ -44,7 +44,7 @@ export class GravelScene extends BaseScene {
   }
 
   init(): void {
-    this.x = START_X;
+    this.x = START_X + this.dx;
     this.phase = 'reverse';
     this.bed = 0;
     this.carried = 1;
@@ -61,7 +61,7 @@ export class GravelScene extends BaseScene {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (this.phase !== 'reverse') return;
       // anywhere on or around the truck picks it up
-      if (Math.abs(p.x - this.x) < 190 && p.y > GROUND_Y - 190 && p.y < GROUND_Y + 60) {
+      if (Math.abs(p.x - this.x) < 190 && p.y > this.gy - 190 && p.y < this.gy + 60) {
         this.grab = p.x - this.x;
       }
     });
@@ -72,8 +72,14 @@ export class GravelScene extends BaseScene {
     this.input.on('pointerup', () => { this.grab = null; });
   }
 
+  /* The layout, written for the 880×550 stage and moved to the middle of this one. */
+  private get gy(): number { return groundY(this); }
+  private get startX(): number { return START_X + this.dx; }
+  private get holeCX(): number { return HOLE_CX + this.dx; }
+  private get tipY(): number { return TIP_Y + this.dy; }
+
   private get hole(): HoleBox {
-    return holeFor(gameState.currentProject.pourCells, HOLE_CX);
+    return holeFor(gameState.currentProject.pourCells, this.holeCX, this.gy);
   }
 
   /** Where the truck stops: its tipping hinge just over the hole's near edge. */
@@ -85,8 +91,9 @@ export class GravelScene extends BaseScene {
     const { width, height } = this.scale;
     siteSky(this, o => this.bg(o));
     const g = this.add.graphics();
-    drawGround(g, width, height);
+    drawGround(g, width, height, this.gy);
     drawHole(g, this.hole);
+    drawPilesUnder(g, this.hole, gameState.currentProject.piles);
     this.bg(g);
   }
 
@@ -108,7 +115,7 @@ export class GravelScene extends BaseScene {
     drawGravelLayer(gravel, hole, (gameState.site.gravel / p.gravelLoads) * GRAVEL_DEPTH);
 
     // the stop sign at the edge of the hole
-    const sign = this.dyn(this.add.graphics().setPosition(hole.x - 18, GROUND_Y));
+    const sign = this.dyn(this.add.graphics().setPosition(hole.x - 18, this.gy));
     sign.fillStyle(COLORS.steelDeep);
     sign.fillRect(-2, -64, 4, 64);
     const parked = this.phase === 'parked';
@@ -130,14 +137,14 @@ export class GravelScene extends BaseScene {
     const truck = this.dyn(this.add.graphics().setName('truck'));
     const stream = this.dyn(this.add.graphics());
     this.everyFrame(dt => {
-      truck.setPosition(this.x, GROUND_Y).setScale(-S, S);
+      truck.setPosition(this.x, this.gy).setScale(-S, S);
       truck.clear();
       drawMachine(truck, 'lastbil', undefined, { bedAngle: this.bed, bedLoad: this.carried });
 
       stream.clear();
       if (this.phase === 'tipping' && this.bed > 0.45 && this.carried > 0) {
         // gravel sliding off the back of the bed into the hole
-        const lip = { x: this.x - (BED_HINGE.x - 10) * S, y: GROUND_Y + BED_HINGE.y * S };
+        const lip = { x: this.x - (BED_HINGE.x - 10) * S, y: this.gy + BED_HINGE.y * S };
         stream.fillStyle(COLORS.gravelDeep);
         for (let i = 0; i < 8; i++) {
           const t = (this.time.now / 300 + i / 8) % 1;
@@ -155,7 +162,7 @@ export class GravelScene extends BaseScene {
     });
 
     if (this.phase === 'parked') {
-      const tip = button(this, this.x - 60, TIP_Y, 'Tip!', COLORS.orange, () => this.tip(), 150, 56, SIZE.heading);
+      const tip = button(this, this.x - 60, this.tipY, 'Tip!', COLORS.orange, () => this.tip(), 150, 56, SIZE.heading);
       tip.setName('tip');
       this.dyn(tip);
       popIn(this, tip, 0, 0.6);
@@ -168,9 +175,9 @@ export class GravelScene extends BaseScene {
     const pointer = new Pointer(this, o => this.dyn(o));
     this.everyFrame(() => {
       if (this.phase === 'reverse' && this.grab === null) {
-        pointer.point(Math.min(this.x + 150, this.stopX + 60), GROUND_Y - 150, 'right');
+        pointer.point(Math.min(this.x + 150, this.stopX + 60), this.gy - 150, 'right');
       } else if (this.phase === 'parked') {
-        pointer.point(this.x - 60, TIP_Y - 34);
+        pointer.point(this.x - 60, this.tipY - 34);
       } else {
         pointer.hide();
       }
@@ -178,13 +185,13 @@ export class GravelScene extends BaseScene {
   }
 
   private moveTo(x: number): void {
-    this.x = Phaser.Math.Clamp(x, 100, this.stopX);
+    this.x = Phaser.Math.Clamp(x, 100 + this.dx, this.stopX);
     if (this.x >= this.stopX - PARK_SLACK) {
       this.x = this.stopX;
       this.grab = null;
       this.phase = 'parked';
       audio.clank();
-      showRing(this, this.hole.x - 18, GROUND_Y - 72, COLORS.green);
+      showRing(this, this.hole.x - 18, this.gy - 72, COLORS.green);
       this.refresh();
     }
   }
@@ -245,7 +252,7 @@ export class GravelScene extends BaseScene {
   private fetchMore(): void {
     audio.horn();
     if (reduceMotion()) {
-      this.x = START_X;
+      this.x = this.startX;
       this.carried = 1;
       this.phase = 'reverse';
       this.refresh();
@@ -258,10 +265,10 @@ export class GravelScene extends BaseScene {
       targets: state,
       tweens: [
         { x: -260, duration: dur(1100), ease: 'Quad.easeIn', onUpdate: () => { this.x = state.x; } },
-        { x: START_X, duration: dur(1100), ease: 'Quad.easeOut', onUpdate: () => { this.x = state.x; } },
+        { x: this.startX, duration: dur(1100), ease: 'Quad.easeOut', onUpdate: () => { this.x = state.x; } },
       ],
       onComplete: () => {
-        this.x = START_X;
+        this.x = this.startX;
         this.carried = 1;
         this.phase = 'reverse';
         this.refresh();
@@ -276,7 +283,7 @@ export class GravelScene extends BaseScene {
     audio.horn();
     showConfetti(this, hole.x + hole.w / 2, 260, 36);
     showPraise(this, hole.x + hole.w / 2, 220, 'Gruset er lagt!');
-    award(this, 3, hole.x + hole.w / 2, GROUND_Y);
+    award(this, 3, hole.x + hole.w / 2, this.gy);
     this.refresh();
   }
 }

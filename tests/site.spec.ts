@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { AT, Game, readySave } from './game';
+import { AT, Game, readyMachine, readySave } from './game';
 
 /**
  * The building site, stage by stage. Each test starts with every machine ready, so it
@@ -107,16 +107,16 @@ test('pouring: holding over each section fills it, then the concrete dries', asy
   game.expectNoErrors();
 });
 
-/** Lifts every remaining frame (and the roof) into place. */
+/** Lifts every remaining frame (and the roof) into place, with whichever crane it is. */
 async function raiseFrame(game: Game): Promise<void> {
   for (let guard = 0; guard < 8; guard++) {
     const s = await game.state();
-    if (s.site.stage !== 3) return;
+    if (s.stage !== 'rejs' && s.stage !== 'taarn') return;
     const placed = s.site.placed;
     const piece = await game.mustFind('CraneScene', 'piece');
     const slot = await game.sceneCall<{ x: number; y: number }>('CraneScene', 'slot');
     await game.drag(piece, slot, 16);
-    await game.expectState(st => st.site.placed > placed || st.site.stage !== 3, 'the frame snaps on').toBe(true);
+    await game.expectState(st => st.site.placed > placed || st.stage === 'mal', 'the frame snaps on').toBe(true);
   }
 }
 
@@ -226,5 +226,105 @@ test('the signpost walks the whole first house in order', async ({ page }) => {
   expect(s.town).toEqual([{ project: 0, color: 3 }]);
   // the machines are all built now, and the excavator has diesel for one more job
   await follow('DigScene');
+  game.expectNoErrors();
+});
+
+/* ------------------------------------------------------- the bigger buildings --- */
+
+test('the pile driver drives to each cross, and three bangs put a pile in', async ({ page }) => {
+  const game = await Game.openWithSave(page, readySave({ stage: 0 }, { project: 2 }));
+  await game.goTo('PileScene');
+  expect((await game.state()).stage).toBe('pael');
+
+  const marks = await game.sceneField<number[]>('PileScene', 'marks');
+  expect(marks, 'the shop stands on three piles').toHaveLength(3);
+  for (let i = 0; i < marks.length; i++) {
+    // drive the rig until its mast is over the cross; it clicks into place
+    const x = await game.sceneField<number>('PileScene', 'x');
+    const mast = await game.sceneField<number>('PileScene', 'mastX');
+    await game.drag({ x, y: GROUND_Y - 60 }, { x: x + (marks[i] - mast), y: GROUND_Y - 60 }, 14);
+    await expect.poll(() => game.sceneField<string>('PileScene', 'phase'), { message: `parked over cross ${i}` })
+      .toBe('parked');
+    for (let bang = 0; bang < 3; bang++) await game.tapNamed('PileScene', 'bang');
+    await game.expectState(s => s.site.piles[i], `pile ${i} is all the way in`).toBe(3);
+  }
+  await game.expectState(s => s.stage, 'then the hole is dug').toBe('grav');
+  expect((await game.state()).machines.pael.diesel, 'the job used half a tank').toBe(0.5);
+  // one star a pile and three for the job, on top of nothing
+  expect((await game.state()).stars).toBe(6);
+  await game.expectScreenText('PileScene').toContain('Videre!');
+  game.expectNoErrors();
+});
+
+test('the pile driver will not bang until it is over a cross', async ({ page }) => {
+  const game = await Game.openWithSave(page, readySave({ stage: 0 }, { project: 2 }));
+  await game.goTo('PileScene');
+  const x = await game.sceneField<number>('PileScene', 'x');
+  await game.drag({ x, y: GROUND_Y - 60 }, { x: x + 20, y: GROUND_Y - 60 }, 4);
+  expect(await game.sceneField<string>('PileScene', 'phase')).toBe('drive');
+  expect(await game.find('PileScene', 'bang'), 'no bang button yet').toBeNull();
+  expect(await page.evaluate(() => window.__state.bang(0)), 'and the state agrees: the stage is open').toBe(false);
+  game.expectNoErrors();
+});
+
+test('the road roller flattens the gravel by driving back and forth over it', async ({ page }) => {
+  const game = await Game.openWithSave(page, readySave({ stage: 2, gravel: 2 }, { project: 1 }));
+  await game.goTo('RollScene');
+  expect((await game.state()).stage).toBe('tromle');
+
+  for (let pass = 0; pass < 6 && (await game.state()).stage === 'tromle'; pass++) {
+    const x = await game.sceneField<number>('RollScene', 'x');
+    // there and back again, over every heap
+    const to = pass % 2 === 0 ? x + 420 : x - 420;
+    await game.drag({ x, y: GROUND_Y - 40 }, { x: to, y: GROUND_Y - 40 }, 24);
+  }
+  await game.expectState(s => s.stage, 'flat, so the foundation is next').toBe('stoeb');
+  const s = await game.state();
+  expect(s.site.rolled).toEqual([1, 1, 1, 1, 1]);
+  expect(s.machines.vejtromle.diesel).toBe(0.5);
+  game.expectNoErrors();
+});
+
+test('the high-rise is raised by the tower crane, then painted', async ({ page }) => {
+  const game = await Game.openWithSave(page, readySave({ stage: 5, gravel: 2 }, { project: 3 }));
+  await game.goTo('CraneScene');
+  expect((await game.state()).stage).toBe('taarn');
+
+  await raiseFrame(game);
+  await game.expectState(s => s.stage, 'four floors and a roof: time to paint').toBe('mal');
+  expect((await game.state()).site.placed).toBe(5);
+  expect((await game.state()).machines.taarnkran.diesel).toBe(0.5);
+
+  await game.tapNamed('CraneScene', 'paint:4');
+  await game.tapNamed('CraneScene', 'go');
+  await game.waitForScene('TownScene');
+  expect((await game.state()).town).toEqual([{ project: 3, color: 4 }]);
+  game.expectNoErrors();
+});
+
+test('each building goes through its own stages, and the signpost asks for each new machine', async ({ page }) => {
+  const game = await Game.openWithSave(page, readySave({}, {
+    project: 1,
+    machines: Object.fromEntries(['gravko', 'lastbil', 'betonbil', 'kran'].map(id => [id, readyMachine(id)])),
+  }));
+
+  const order = (project: number) => page.evaluate((p) => {
+    const s = window.__state;
+    s.project = p;
+    s.site = { stage: 0, dug: [], gravel: 0, rolled: [], poured: [], placed: 0, piles: [] };
+    return s.stages.map((st: { id: string }) => st.id);
+  }, project);
+  expect(await order(0)).toEqual(['grav', 'grus', 'stoeb', 'rejs', 'mal']);
+  expect(await order(1)).toEqual(['grav', 'grus', 'tromle', 'stoeb', 'rejs', 'mal']);
+  expect(await order(2)).toEqual(['pael', 'grav', 'grus', 'tromle', 'stoeb', 'rejs', 'mal']);
+  expect(await order(3)).toEqual(['pael', 'grav', 'grus', 'tromle', 'stoeb', 'taarn', 'mal']);
+
+  // the shop starts with the pile driver, which nobody has built yet
+  await order(2);
+  await game.goTo('TownScene');
+  await game.expectScreenText('TownScene').toContain('Byg pælerammen');
+  await game.tap(AT.sign.x, AT.sign.y);
+  await game.waitForScene('AssembleScene');
+  expect(await game.sceneField<string>('AssembleScene', 'machine')).toBe('pael');
   game.expectNoErrors();
 });

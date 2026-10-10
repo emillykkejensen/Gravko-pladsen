@@ -35,10 +35,10 @@ the conditions rather than by installing anything.
 | | Why |
 | --- | --- |
 | **A way out** | An immersive WebView has no system bars and no address bar, so without this there is no exit at all. The title screen's **Afslut** button calls `App.exitApp()`; on the web, where no page may close its own tab, it says goodbye instead. |
-| **Landscape lock and immersive fullscreen** | The game is 880×550. A status bar across the building site breaks the picture and a navigation bar sits where a child rests their thumbs. |
+| **Landscape lock and immersive fullscreen** | The game fills the screen in landscape (see "Filling the screen" in the README). A status bar across the building site breaks the picture and a navigation bar sits where a child rests their thumbs. |
 | **The hardware back button** | It means what the on-screen arrow means: workshop → town → title screen, and only then does it close the app. `addBackButton` registers the target and `helpers/Navigation.ts` answers the question, so the two buttons cannot disagree. |
 | **Keep-awake** | A child watching the concrete dry does not touch the screen for a while. |
-| **The save mirrored to native storage** | `localStorage` in a WebView is not durable: Android can clear web storage to reclaim space. Every write also goes to SharedPreferences and is read back if web storage comes up empty. |
+| **Every player's save mirrored to native storage** | `localStorage` in a WebView is not durable: Android can clear web storage to reclaim space. Every write — the list of players and each player's save, under the same keys — also goes to SharedPreferences, and is read back if web storage comes up empty. |
 | **A bundled font** | Nunito used to come from Google Fonts. With no network in the app, that would silently fall back to a system face and every label would change width. It is now a 38 KB variable file in `public/fonts/`. |
 
 ## Signing

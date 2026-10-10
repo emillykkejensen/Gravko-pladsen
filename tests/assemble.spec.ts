@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { AT, Game, readyMachine } from './game';
+import { ALL_PARTS, AT, Game, readyMachine, readySave } from './game';
 
 /**
  * Building a machine: parts are dragged from the floor onto the machine, in any order.
@@ -48,10 +48,12 @@ test('a part let go roughly near its place snaps on', async ({ page }) => {
   game.expectNoErrors();
 });
 
+const MACHINES = ['gravko', 'lastbil', 'betonbil', 'kran', 'vejtromle', 'pael', 'taarnkran'];
+
 test('on the first building, only the machine the site needs can be built', async ({ page }) => {
   const game = await Game.open(page);
-  expect(await page.evaluate(() => ['gravko', 'lastbil', 'betonbil', 'kran'].map(id => window.__state.isUnlocked(id))))
-    .toEqual([true, false, false, false]);
+  const unlocked = () => page.evaluate((ids) => ids.map(id => window.__state.isUnlocked(id)), MACHINES);
+  expect(await unlocked()).toEqual([true, false, false, false, false, false, false]);
   expect(await page.evaluate(() => window.__state.placePart('lastbil', 'hjul')), 'a locked machine takes no parts')
     .toBe(false);
 
@@ -72,10 +74,46 @@ test('on the first building, only the machine the site needs can be built', asyn
     for (let i = 0; i < 8; i++) window.__state.dig(i);
     window.__state.completeStage();
   });
-  expect(await page.evaluate(() => ['gravko', 'lastbil', 'betonbil', 'kran'].map(id => window.__state.isUnlocked(id))))
-    .toEqual([true, true, false, false]);
+  expect(await unlocked()).toEqual([true, true, false, false, false, false, false]);
   game.expectNoErrors();
 });
+
+test('the bigger buildings each bring a new machine, built like the rest', async ({ page }) => {
+  // The villa, with the gravel in: time for the road roller. The pile driver and the tower
+  // crane stay locked, and say which building they are for.
+  const game = await Game.openWithSave(page, readySave({ stage: 2, gravel: 2 }, {
+    project: 1,
+    machines: Object.fromEntries(['gravko', 'lastbil', 'betonbil', 'kran'].map(id => [id, readyMachine(id)])),
+  }));
+  expect(await page.evaluate((ids) => ids.map(id => window.__state.isUnlocked(id)), MACHINES))
+    .toEqual([true, true, true, true, true, false, false]);
+  await game.expectState(s => s.next).toMatchObject({ kind: 'assemble', machine: 'vejtromle' });
+
+  await game.goTo('GarageScene');
+  await game.expectScreenText('GarageScene').toContain('Til butikken');
+  await game.expectScreenText('GarageScene').toContain('Til højhuset');
+
+  await game.tapNamed('GarageScene', 'card:vejtromle');
+  await game.waitForScene('AssembleScene');
+  await placeAll(game, 'vejtromle', ['hus', 'tromle', 'motor', 'hjul', 'ramme']);
+  // one star a part, and three for the finished machine
+  await game.expectState(s => s.stars, 'parts and the finished machine pay').toBe(8);
+  await game.expectState(s => s.next).toMatchObject({ kind: 'prepare', machine: 'vejtromle' });
+  game.expectNoErrors();
+});
+
+for (const [machine, project, stage] of [['pael', 2, 0], ['taarnkran', 3, 5]] as const) {
+  test(`the ${machine} can be built in any order once its building needs it`, async ({ page }) => {
+    const game = await Game.openWithSave(page, readySave({ stage }, {
+      project,
+      machines: Object.fromEntries(MACHINES.filter(id => id !== machine).map(id => [id, readyMachine(id)])),
+    }));
+    await game.goTo('AssembleScene', { machine });
+    await placeAll(game, machine, [...ALL_PARTS[machine]].reverse());
+    await game.expectState(s => s.machines[machine].parts).toHaveLength(ALL_PARTS[machine].length);
+    game.expectNoErrors();
+  });
+}
 
 test('a part let go far from its place goes back to the floor', async ({ page }) => {
   const game = await Game.open(page);

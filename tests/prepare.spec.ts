@@ -77,7 +77,7 @@ test('the nozzle pours nothing away from the cap', async ({ page }) => {
   game.expectNoErrors();
 });
 
-for (const machine of ['lastbil', 'betonbil', 'kran']) {
+for (const machine of ['lastbil', 'betonbil', 'kran', 'vejtromle', 'pael', 'taarnkran']) {
   test(`${machine} has a third job of its own`, async ({ page }) => {
     const game = await Game.openWithSave(page, {
       machines: { [machine]: { ...readyMachine(machine), extra: [false, false, false] } },

@@ -2,8 +2,8 @@ import Phaser from 'phaser';
 import { COLORS, INK_SOFT, SIZE, text } from '../config';
 import { drawStarShape, gradientBand } from '../helpers/Draw';
 import { reduceMotion } from '../helpers/Motion';
-import { restoreSaveIfEmpty } from '../helpers/Native';
-import { SAVE_KEY, gameState } from '../state/GameState';
+import { gameState } from '../state/GameState';
+import { lastProfileId, restoreFromMirror } from '../state/Profiles';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -42,9 +42,9 @@ export class BootScene extends Phaser.Scene {
     const ready = document.fonts?.ready ?? Promise.resolve();
 
     // On Android, native storage is the durable copy: if the WebView has lost its web
-    // storage, put it back before any scene reads the save. No-op in a browser.
-    const restored = restoreSaveIfEmpty(SAVE_KEY).then(did => {
-      if (did) gameState.load();
+    // storage, put every player back before the title screen lists them. No-op in a browser.
+    const restored = restoreFromMirror().then(did => {
+      if (did) gameState.loadProfile(lastProfileId());
     });
 
     Promise.race([

@@ -8,7 +8,7 @@ import { dur, popIn, reduceMotion } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
 import { showConfetti, showPraise, showRing, showSparkle } from '../objects/FeedbackEffects';
 import { ART, drawMachine, drawMachineProgress, machineBounds, partGraphic } from '../objects/MachineArt';
-import { FLOOR_Y, workshopBackdrop } from '../objects/SiteArt';
+import { floorY, workshopBackdrop } from '../objects/SiteArt';
 import { Pointer, drawTargetZone, hintBanner } from '../ui/Guide';
 import { BaseScene } from './BaseScene';
 
@@ -19,8 +19,8 @@ import { BaseScene } from './BaseScene';
  */
 const SNAP = 120;
 
-/** Where the parts lie on the floor. */
-const PILE_Y = 498;
+/** Where the parts lie: this far below the floor line, in front of the lift. */
+const PILE_BELOW_FLOOR = 58;
 
 interface Drag {
   part: string;
@@ -53,6 +53,14 @@ export class AssembleScene extends BaseScene {
     this.drag = null;
   }
 
+  private get floor(): number {
+    return floorY(this);
+  }
+
+  private get pileY(): number {
+    return this.floor + PILE_BELOW_FLOOR;
+  }
+
   create(): void {
     // The workshop only offers machines the site has a job for; a stale route or the
     // back button must not open one that is still locked.
@@ -64,8 +72,8 @@ export class AssembleScene extends BaseScene {
     const b = machineBounds(this.machine);
     this.scaleM = Math.min(1, 540 / b.w, 280 / b.h);
     this.origin = {
-      x: 470 - (b.x + b.w / 2) * this.scaleM,
-      y: FLOOR_Y - 14,
+      x: this.scale.width / 2 + 30 - (b.x + b.w / 2) * this.scaleM,
+      y: this.floor - 14,
     };
 
     super.create();
@@ -81,11 +89,11 @@ export class AssembleScene extends BaseScene {
     workshopBackdrop(this, o => this.bg(o));
     // the lift the machine is built on
     const g = this.add.graphics();
-    plate(g, this.origin.x - 230, FLOOR_Y - 18, 460, 16, 6, COLORS.steel, 1, 2.5);
+    plate(g, this.origin.x - 230, this.floor - 18, 460, 16, 6, COLORS.steel, 1, 2.5);
     this.bg(g);
     // a pallet under the parts
     const p = this.add.graphics();
-    plate(p, 20, PILE_Y + 26, this.scale.width - 40, 12, 4, COLORS.wood, 1, 2);
+    plate(p, 20, this.pileY + 26, this.scale.width - 40, 12, 4, COLORS.wood, 1, 2);
     this.bg(p);
   }
 
@@ -141,7 +149,7 @@ export class AssembleScene extends BaseScene {
       const art = ART[this.machine][part.id];
       const x = 40 + spacing * (i + 0.5);
       const scale = Math.min(0.85, (spacing - 18) / art.size.w, 86 / art.size.h);
-      const c = this.dyn(this.add.container(x, PILE_Y)).setName(`part:${part.id}`).setScale(scale);
+      const c = this.dyn(this.add.container(x, this.pileY)).setName(`part:${part.id}`).setScale(scale);
       c.add(partGraphic(this, this.machine, part.id));
       c.setSize(Math.max(art.size.w, 70 / scale), Math.max(art.size.h, 70 / scale));
       c.setInteractive({ useHandCursor: true });
@@ -163,7 +171,7 @@ export class AssembleScene extends BaseScene {
         const art = ART[this.machine][this.drag.part];
         pointer.point(t.x, t.y - (art.size.h * this.scaleM) / 2 - 6);
       } else {
-        pointer.point(firstLoose.x, PILE_Y - 52);
+        pointer.point(firstLoose.x, this.pileY - 52);
       }
     });
   }
@@ -233,7 +241,7 @@ export class AssembleScene extends BaseScene {
     const c = caption(this, this.scale.width / 2, 92, 'Færdig! Nu skal den have diesel og olie.', 'done');
     this.dyn(c);
 
-    const go = button(this, this.scale.width / 2, PILE_Y, 'Gør den klar!', COLORS.green,
+    const go = button(this, this.scale.width / 2, this.pileY, 'Gør den klar!', COLORS.green,
       () => this.goTo('PrepScene', { machine: this.machine }), 250, 58, SIZE.heading);
     go.setName('go');
     this.dyn(go);

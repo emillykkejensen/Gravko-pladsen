@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { COLORS, LINE } from '../config';
 import type { MachineId } from '../state/Machines';
+import { gameState } from '../state/GameState';
+import { Livery, liveryById } from '../state/Shop';
 
 /**
  * How the four machines are drawn.
@@ -15,7 +17,8 @@ import type { MachineId } from '../state/Machines';
  * a pose, so the building site can drive them with the same drawing.
  *
  * The look follows the reference picture: construction yellow, warm black trim and rubber,
- * a blue windscreen with a smiling face in it, everything outlined.
+ * a blue windscreen with a smiling face in it, everything outlined. The yellow is the
+ * machines' livery, and a child can buy them a different one in the star shop.
  */
 
 export interface Pt { x: number; y: number }
@@ -26,6 +29,25 @@ export interface Style { ghost: boolean }
 const REAL: Style = { ghost: false };
 const GHOST_FILL = 0.22;
 const GHOST_LINE = 0.45;
+
+/** A livery being shown off rather than worn — the shop's preview of a coat of paint. */
+let trying: string | null = null;
+
+/** The machines' paint right now. Read at draw time, so a new coat shows on the next frame. */
+function paint(): Livery {
+  return liveryById(trying ?? gameState.livery);
+}
+
+/** Draws with another coat of paint for the length of `draw`, for the shop's previews. */
+export function inLivery(id: string, draw: () => void): void {
+  const before = trying;
+  trying = id;
+  try {
+    draw();
+  } finally {
+    trying = before;
+  }
+}
 
 function fill(g: Phaser.GameObjects.Graphics, s: Style, color: number, alpha = 1): void {
   if (s.ghost) g.fillStyle(COLORS.outline, GHOST_FILL);
@@ -45,6 +67,19 @@ function box(
   g.fillRoundedRect(x, y, w, h, r);
   line(g, s);
   g.strokeRoundedRect(x, y, w, h, r);
+  if (!s.ghost && color === paint().body) glint(g, x, y, w, h);
+}
+
+/** The gold livery's shine: a bright diagonal streak across a painted panel. */
+function glint(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
+  if (!paint().shiny || w < 18 || h < 12) return;
+  const t = Math.min(w, h) * 0.22;
+  const sx = x + w * 0.62;
+  g.fillStyle(COLORS.white, 0.55);
+  g.fillPoints([
+    { x: sx, y: y + 3 }, { x: sx + t, y: y + 3 },
+    { x: sx + t - h * 0.5, y: y + h - 3 }, { x: sx - h * 0.5, y: y + h - 3 },
+  ], true);
 }
 
 function poly(g: Phaser.GameObjects.Graphics, s: Style, pts: Pt[], color: number): void {
@@ -166,7 +201,7 @@ function cab(
   if (s.ghost) return;
   // the lower body panel
   const ly = y + h * (1 - lower);
-  box(g, s, x, ly, w, h * lower, 8, COLORS.machine);
+  box(g, s, x, ly, w, h * lower, 8, paint().body);
   g.fillStyle(COLORS.white, 0.25);
   g.fillRoundedRect(x + 4, ly + 3, w - 8, h * lower * 0.3, 5);
   // windscreen
@@ -224,7 +259,7 @@ function gravkoBody(g: Phaser.GameObjects.Graphics, s: Style): void {
   // the slewing ring between tracks and body
   box(g, s, -60, -62, 120, 16, 6, COLORS.rubber);
   // body with the counterweight curving down at the back
-  fill(g, s, COLORS.machine);
+  fill(g, s, paint().body);
   const body = [
     { x: -108, y: -128 }, { x: 62, y: -128 }, { x: 62, y: -60 },
     { x: -92, y: -60 }, { x: -108, y: -76 },
@@ -246,7 +281,7 @@ function gravkoBody(g: Phaser.GameObjects.Graphics, s: Style): void {
   g.fillStyle(COLORS.rubberLight);
   for (let x = -94; x < -32; x += 12) g.fillRect(x, -140, 6, 9);
   // a sweep of deeper yellow on the side panel
-  g.fillStyle(COLORS.machineDeep, 0.7);
+  g.fillStyle(paint().deep, 0.7);
   g.fillTriangle(-30, -84, 20, -84, 20, -112);
 }
 
@@ -292,7 +327,7 @@ function gravkoBucket(
 /** The whole arm — boom, stick and bucket — in any pose. */
 export function drawGravkoArm(g: Phaser.GameObjects.Graphics, pose: ArmPose, s: Style = REAL, only?: 'bom' | 'arm' | 'skovl'): void {
   if (!only || only === 'bom') {
-    capsule(g, s, pose.root, pose.elbow, 15, COLORS.machine);
+    capsule(g, s, pose.root, pose.elbow, 15, paint().body);
     if (!s.ghost) {
       // the hydraulic ram under the boom
       const mid = { x: (pose.root.x + pose.elbow.x) / 2, y: (pose.root.y + pose.elbow.y) / 2 };
@@ -302,7 +337,7 @@ export function drawGravkoArm(g: Phaser.GameObjects.Graphics, pose: ArmPose, s: 
     }
   }
   if (!only || only === 'arm') {
-    capsule(g, s, pose.elbow, pose.wrist, 11, COLORS.machine);
+    capsule(g, s, pose.elbow, pose.wrist, 11, paint().body);
     if (!s.ghost) {
       // black inner panel like the reference picture's arm
       const a = Phaser.Math.Linear(pose.elbow.x, pose.wrist.x, 0.2);
@@ -350,16 +385,16 @@ export function drawTruckBed(g: Phaser.GameObjects.Graphics, angle: number, load
       g.fillCircle(p.x, p.y, 6);
     }
   }
-  poly(g, s, shape.map(to), COLORS.machine);
+  poly(g, s, shape.map(to), paint().body);
   if (s.ghost) return;
-  g.lineStyle(LINE.thin, COLORS.machineDeep);
+  g.lineStyle(LINE.thin, paint().deep);
   for (let x = -110; x <= 20; x += 32) {
     const a = to({ x, y: -130 });
     const b = to({ x: x + 2, y: -70 });
     g.lineBetween(a.x, a.y, b.x, b.y);
   }
   const lip = [to({ x: -150, y: -142 }), to({ x: 50, y: -142 }), to({ x: 48, y: -132 }), to({ x: -148, y: -132 })];
-  poly(g, s, lip, COLORS.machineDeep);
+  poly(g, s, lip, paint().deep);
 }
 
 function truckWheels(g: Phaser.GameObjects.Graphics, s: Style, xs: number[], r = 26): void {
@@ -408,7 +443,7 @@ export function drawDrum(g: Phaser.GameObjects.Graphics, phase: number, s: Style
   g.strokeEllipse(x, y, 176, 92);
   if (s.ghost) return;
   // the spiral stripes, slid along by `phase` so the drum visibly turns
-  g.fillStyle(COLORS.machine);
+  g.fillStyle(paint().body);
   for (let i = -2; i < 4; i++) {
     const sx = x - 80 + (((i * 40 + phase * 40) % 200) + 200) % 200;
     if (sx < x - 82 || sx > x + 70) continue;
@@ -427,7 +462,7 @@ export function drawDrum(g: Phaser.GameObjects.Graphics, phase: number, s: Style
 }
 
 export function drawChute(g: Phaser.GameObjects.Graphics, tip: Pt, s: Style = REAL, wet = false): void {
-  capsule(g, s, CHUTE_ROOT, tip, 8, COLORS.machineDeep);
+  capsule(g, s, CHUTE_ROOT, tip, 8, paint().deep);
   if (s.ghost) return;
   if (wet) {
     g.fillStyle(COLORS.concreteWet);
@@ -448,8 +483,8 @@ export function drawCraneBoom(g: Phaser.GameObjects.Graphics, tip: Pt, s: Style 
     x: Phaser.Math.Linear(BOOM_ROOT.x, tip.x, 0.55),
     y: Phaser.Math.Linear(BOOM_ROOT.y, tip.y, 0.55),
   };
-  capsule(g, s, mid, tip, 9, COLORS.machineLight);
-  capsule(g, s, BOOM_ROOT, mid, 14, COLORS.machine);
+  capsule(g, s, mid, tip, 9, paint().light);
+  capsule(g, s, BOOM_ROOT, mid, 14, paint().body);
   if (s.ghost) return;
   // warning stripes at the base
   pin(g, s, BOOM_ROOT, 8);
@@ -463,7 +498,7 @@ export function drawHook(g: Phaser.GameObjects.Graphics, from: Pt, to: Pt, s: St
     g.lineBetween(from.x - 3, from.y, to.x - 3, to.y - 14);
     g.lineBetween(from.x + 3, from.y, to.x + 3, to.y - 14);
   }
-  box(g, s, to.x - 11, to.y - 22, 22, 18, 5, COLORS.machine);
+  box(g, s, to.x - 11, to.y - 22, 22, 18, 5, paint().body);
   if (s.ghost) return;
   g.lineStyle(4.5, COLORS.outline);
   g.beginPath();
@@ -476,7 +511,7 @@ export function drawHook(g: Phaser.GameObjects.Graphics, from: Pt, to: Pt, s: St
 }
 
 function craneTurntable(g: Phaser.GameObjects.Graphics, s: Style): void {
-  box(g, s, -112, -88, 146, 26, 9, COLORS.machine);
+  box(g, s, -112, -88, 146, 26, 9, paint().body);
   if (s.ghost) return;
   // black and yellow hazard stripes on the counterweight
   g.fillStyle(COLORS.rubber);
@@ -487,6 +522,282 @@ function craneTurntable(g: Phaser.GameObjects.Graphics, s: Style): void {
   box(g, s, -20, -122, 48, 36, 8, COLORS.rubber);
   box(g, s, -14, -116, 30, 22, 5, COLORS.glass);
   face(g, 1, -105, 20);
+}
+
+/* ---------------------------------------------------------- the road roller ---- */
+
+/** The roller's front drum: the whole point of the machine. */
+export const ROLLER_DRUM: Pt = { x: 92, y: -50 };
+export const ROLLER_DRUM_R = 50;
+export const ROLLER_WHEEL: Pt = { x: -92, y: -40 };
+
+/** Five bolts round a hub, turned by `phase` so a rolling drum visibly rolls. */
+function hubBolts(g: Phaser.GameObjects.Graphics, c: Pt, r: number, phase: number): void {
+  g.fillStyle(COLORS.steelDeep);
+  for (let i = 0; i < 5; i++) {
+    const a = phase + (i / 5) * Math.PI * 2;
+    g.fillCircle(c.x + Math.cos(a) * r, c.y + Math.sin(a) * r, Math.max(2, r * 0.18));
+  }
+}
+
+function rollerDrum(g: Phaser.GameObjects.Graphics, s: Style, phase = 0): void {
+  const { x, y } = ROLLER_DRUM;
+  disc(g, s, x, y, ROLLER_DRUM_R, COLORS.steel);
+  if (s.ghost) return;
+  g.fillStyle(COLORS.steelLight);
+  g.fillCircle(x, y, ROLLER_DRUM_R * 0.82);
+  disc(g, s, x, y, ROLLER_DRUM_R * 0.58, paint().body);
+  disc(g, s, x, y, ROLLER_DRUM_R * 0.22, COLORS.rubber);
+  hubBolts(g, { x, y }, ROLLER_DRUM_R * 0.4, phase);
+  g.fillStyle(COLORS.white, 0.35);
+  g.fillEllipse(x - 18, y - 28, 26, 9);
+}
+
+function rollerWheel(g: Phaser.GameObjects.Graphics, s: Style, phase = 0): void {
+  wheel(g, s, ROLLER_WHEEL.x, ROLLER_WHEEL.y, 40);
+  if (!s.ghost) hubBolts(g, ROLLER_WHEEL, 13, phase);
+}
+
+function rollerFrame(g: Phaser.GameObjects.Graphics, s: Style): void {
+  // the chassis between the wheels
+  box(g, s, -140, -96, 176, 46, 10, paint().body);
+  if (!s.ghost) {
+    g.fillStyle(COLORS.rubber);
+    g.fillRect(-132, -66, 160, 10);
+    // the joint the machine bends at to steer
+    box(g, s, 26, -92, 30, 34, 6, COLORS.rubberLight);
+  }
+  // the hood over the drum
+  box(g, s, 30, -124, 126, 22, 10, paint().body);
+  if (!s.ghost) {
+    g.fillStyle(COLORS.rubber);
+    for (let x = 40; x < 150; x += 22) {
+      g.fillPoints([{ x, y: -121 }, { x: x + 10, y: -121 }, { x: x + 4, y: -105 }, { x: x - 6, y: -105 }], true);
+    }
+    g.lineStyle(LINE.base, COLORS.outline);
+    g.strokeRoundedRect(30, -124, 126, 22, 10);
+  }
+}
+
+function rollerMotor(g: Phaser.GameObjects.Graphics, s: Style): void {
+  box(g, s, -148, -138, 84, 46, 10, paint().body);
+  if (s.ghost) return;
+  // grille slats and an exhaust pipe with a cap
+  g.fillStyle(COLORS.rubber);
+  for (let x = -138; x < -80; x += 12) g.fillRect(x, -126, 6, 22);
+  box(g, s, -82, -164, 10, 30, 4, COLORS.steelDeep);
+  box(g, s, -86, -170, 18, 8, 3, COLORS.rubber);
+}
+
+function rollerCab(g: Phaser.GameObjects.Graphics, s: Style): void {
+  cab(g, s, -58, -206, 86, 112);
+  if (s.ghost) return;
+  box(g, s, -30, -216, 22, 12, 5, COLORS.orange);
+}
+
+/* ---------------------------------------------------------- the pile driver ---- */
+
+/** The mast's rail, which the hammer slides up and down. */
+export const MAST_X = 118;
+export const MAST_FOOT = -20;
+export const MAST_TOP = -404;
+/** The hammer's bottom edge at rest, high up the mast. */
+export const HAMMER_REST = -300;
+export const HAMMER_H = 58;
+
+function pileBody(g: Phaser.GameObjects.Graphics, s: Style): void {
+  box(g, s, -60, -62, 120, 16, 6, COLORS.rubber);
+  fill(g, s, paint().body);
+  const body = [
+    { x: -110, y: -122 }, { x: 96, y: -122 }, { x: 96, y: -60 },
+    { x: -94, y: -60 }, { x: -110, y: -76 },
+  ];
+  g.fillPoints(body, true);
+  line(g, s, LINE.thick);
+  g.strokePoints(body, true, true);
+  if (s.ghost) return;
+  g.fillStyle(COLORS.rubber);
+  g.fillRect(-102, -84, 196, 12);
+  g.fillStyle(COLORS.white, 0.3);
+  g.fillRoundedRect(-102, -118, 190, 10, 5);
+  // the winch drum the hammer's cable comes off
+  disc(g, s, -70, -102, 13, COLORS.steelLight);
+  g.fillStyle(COLORS.steelDeep);
+  g.fillCircle(-70, -102, 4);
+}
+
+function pileCab(g: Phaser.GameObjects.Graphics, s: Style): void {
+  cab(g, s, -36, -202, 92, 82);
+}
+
+function pileMast(g: Phaser.GameObjects.Graphics, s: Style): void {
+  // the brace from the body up to the mast
+  capsule(g, s, { x: 40, y: -122 }, { x: MAST_X - 8, y: -262 }, 6, COLORS.steelLight);
+  // the mast: a tall rail with hazard stripes, a foot and a sheave on top
+  box(g, s, MAST_X - 12, MAST_TOP, 24, MAST_FOOT - MAST_TOP, 6, paint().body);
+  if (!s.ghost) {
+    g.fillStyle(COLORS.rubber);
+    for (let y = MAST_TOP + 20; y < MAST_FOOT - 14; y += 34) g.fillRect(MAST_X - 9, y, 18, 10);
+    g.lineStyle(LINE.base, COLORS.outline);
+    g.strokeRoundedRect(MAST_X - 12, MAST_TOP, 24, MAST_FOOT - MAST_TOP, 6);
+  }
+  box(g, s, MAST_X - 20, MAST_FOOT - 4, 40, 14, 5, COLORS.rubber);
+  disc(g, s, MAST_X, MAST_TOP - 2, 13, COLORS.steelLight);
+  if (!s.ghost) {
+    g.fillStyle(COLORS.steelDeep);
+    g.fillCircle(MAST_X, MAST_TOP - 2, 4);
+  }
+}
+
+/** The drop hammer, its bottom edge at `bottom`, and the cable up over the sheave. */
+export function drawHammer(g: Phaser.GameObjects.Graphics, bottom: number, s: Style = REAL): void {
+  const top = bottom - HAMMER_H;
+  if (!s.ghost) {
+    g.lineStyle(2.5, COLORS.outline);
+    g.lineBetween(MAST_X, MAST_TOP + 10, MAST_X, top);
+  }
+  box(g, s, MAST_X - 22, top, 44, HAMMER_H, 7, COLORS.rubber);
+  if (s.ghost) return;
+  box(g, s, MAST_X - 22, top + 18, 44, 16, 4, paint().body);
+  g.fillStyle(COLORS.white, 0.2);
+  g.fillRect(MAST_X - 18, top + 4, 8, HAMMER_H - 10);
+}
+
+/* --------------------------------------------------------- the tower crane ---- */
+
+export const TOWER_TOP = -420;
+/** Where the jib's underside is — the trolley runs along it. */
+export const JIB_Y = -440;
+export const JIB_END = 430;
+export const COUNTER_END = -170;
+export const PEAK: Pt = { x: 0, y: -522 };
+export const TROLLEY_REST = 300;
+export const TOWER_HOOK_REST = -380;
+
+/** A lattice girder between two x positions: top and bottom chords and a zigzag. */
+function lattice(
+  g: Phaser.GameObjects.Graphics, s: Style,
+  x1: number, x2: number, top: number, bottom: number, color: number
+): void {
+  const left = Math.min(x1, x2);
+  const w = Math.abs(x2 - x1);
+  if (s.ghost) {
+    g.fillStyle(COLORS.outline, GHOST_FILL);
+    g.fillRect(left, top, w, bottom - top);
+    return;
+  }
+  const bar = (a: Pt, b: Pt, r: number) => {
+    g.lineStyle(r * 2 + LINE.base * 2, COLORS.outline);
+    g.lineBetween(a.x, a.y, b.x, b.y);
+  };
+  const paintBar = (a: Pt, b: Pt, r: number) => {
+    g.lineStyle(r * 2, color);
+    g.lineBetween(a.x, a.y, b.x, b.y);
+  };
+  const step = Math.max(14, bottom - top);
+  const bars: [Pt, Pt, number][] = [
+    [{ x: left, y: top }, { x: left + w, y: top }, 2.5],
+    [{ x: left, y: bottom }, { x: left + w, y: bottom }, 3],
+  ];
+  for (let x = left, up = true; x < left + w - 1; x += step, up = !up) {
+    const nx = Math.min(left + w, x + step);
+    bars.push([{ x, y: up ? bottom : top }, { x: nx, y: up ? top : bottom }, 1.8]);
+  }
+  for (const [a, b, r] of bars) bar(a, b, r);
+  for (const [a, b, r] of bars) paintBar(a, b, r);
+}
+
+/** The same, standing up: the tower. */
+function latticeTower(
+  g: Phaser.GameObjects.Graphics, s: Style,
+  bottom: number, top: number, half: number, color: number
+): void {
+  if (s.ghost) {
+    g.fillStyle(COLORS.outline, GHOST_FILL);
+    g.fillRect(-half, top, half * 2, bottom - top);
+    return;
+  }
+  const bars: [Pt, Pt, number][] = [
+    [{ x: -half, y: bottom }, { x: -half, y: top }, 3.5],
+    [{ x: half, y: bottom }, { x: half, y: top }, 3.5],
+  ];
+  const step = half * 2;
+  for (let y = bottom, left = true; y > top + 1; y -= step, left = !left) {
+    const ny = Math.max(top, y - step);
+    bars.push([{ x: left ? -half : half, y }, { x: left ? half : -half, y: ny }, 2]);
+    bars.push([{ x: -half, y }, { x: half, y }, 1.6]);
+  }
+  for (const [a, b, r] of bars) {
+    g.lineStyle(r * 2 + LINE.base * 2, COLORS.outline);
+    g.lineBetween(a.x, a.y, b.x, b.y);
+  }
+  for (const [a, b, r] of bars) {
+    g.lineStyle(r * 2, color);
+    g.lineBetween(a.x, a.y, b.x, b.y);
+  }
+}
+
+function towerFoot(g: Phaser.GameObjects.Graphics, s: Style): void {
+  box(g, s, -72, -26, 144, 26, 6, COLORS.concrete);
+  if (s.ghost) return;
+  g.fillStyle(COLORS.concreteDeep, 0.5);
+  g.fillRect(-64, -10, 128, 4);
+  box(g, s, -50, -38, 100, 14, 4, paint().deep);
+}
+
+function towerMast(g: Phaser.GameObjects.Graphics, s: Style): void {
+  latticeTower(g, s, -36, TOWER_TOP, 18, paint().body);
+}
+
+function towerTop(g: Phaser.GameObjects.Graphics, s: Style): void {
+  // the tower head: an A-frame the jib is tied to
+  if (!s.ghost) {
+    g.lineStyle(9, COLORS.outline);
+    g.lineBetween(-16, JIB_Y - 18, PEAK.x, PEAK.y);
+    g.lineBetween(16, JIB_Y - 18, PEAK.x, PEAK.y);
+    g.lineStyle(4.5, paint().body);
+    g.lineBetween(-16, JIB_Y - 18, PEAK.x, PEAK.y);
+    g.lineBetween(16, JIB_Y - 18, PEAK.x, PEAK.y);
+  } else {
+    g.fillStyle(COLORS.outline, GHOST_FILL);
+    g.fillTriangle(-16, JIB_Y - 18, PEAK.x, PEAK.y, 16, JIB_Y - 18);
+  }
+  // the slewing ring, and the operator's cab hanging beside it
+  box(g, s, -28, TOWER_TOP - 12, 56, 16, 5, COLORS.rubber);
+  box(g, s, 22, JIB_Y + 2, 50, 44, 8, COLORS.rubber);
+  if (s.ghost) return;
+  box(g, s, 28, JIB_Y + 8, 38, 26, 6, COLORS.glass);
+  face(g, 47, JIB_Y + 22, 24);
+  disc(g, s, PEAK.x, PEAK.y, 6, COLORS.steelLight);
+}
+
+function towerJib(g: Phaser.GameObjects.Graphics, s: Style): void {
+  lattice(g, s, 16, JIB_END, JIB_Y - 18, JIB_Y, paint().body);
+  if (s.ghost) return;
+  box(g, s, JIB_END - 6, JIB_Y - 22, 12, 26, 4, paint().deep);
+}
+
+function towerCounter(g: Phaser.GameObjects.Graphics, s: Style): void {
+  lattice(g, s, COUNTER_END, -16, JIB_Y - 16, JIB_Y, paint().body);
+  // the concrete blocks that balance the load
+  for (let i = 0; i < 3; i++) box(g, s, COUNTER_END + 4 + i * 20, JIB_Y - 4, 18, 38, 3, COLORS.concrete);
+}
+
+/**
+ * The ropes from the tower head out to the jib and the counter-jib. Only once both ends are
+ * on: drawn with either part alone, a rope would hang off it into thin air.
+ */
+function towerTies(g: Phaser.GameObjects.Graphics, has: (part: string) => boolean): void {
+  if (!has('top')) return;
+  g.lineStyle(2, COLORS.outline, 0.9);
+  if (has('udligger')) g.lineBetween(PEAK.x, PEAK.y, JIB_END - 120, JIB_Y - 18);
+  if (has('vaegt')) g.lineBetween(PEAK.x, PEAK.y, COUNTER_END + 20, JIB_Y - 16);
+}
+
+/** The trolley at `at.x` along the jib, and the hook hanging from it down to `at.y`. */
+export function drawTowerHook(g: Phaser.GameObjects.Graphics, at: Pt, s: Style = REAL): void {
+  box(g, s, at.x - 16, JIB_Y - 4, 32, 12, 4, COLORS.rubber);
+  drawHook(g, { x: at.x, y: JIB_Y + 8 }, at, s);
 }
 
 /* ================================================================ registry ======== */
@@ -533,6 +844,36 @@ export const ART: Record<MachineId, Record<string, PartArt>> = {
       draw: (g, s) => drawHook(g, BOOM_TIP_REST, { x: BOOM_TIP_REST.x, y: BOOM_TIP_REST.y + HOOK_DROP }, s),
     },
   },
+  vejtromle: {
+    tromle: { center: ROLLER_DRUM, size: { w: 100, h: 100 }, draw: (g, s) => rollerDrum(g, s) },
+    ramme: { center: { x: 8, y: -87 }, size: { w: 296, h: 74 }, draw: rollerFrame },
+    hjul: { center: ROLLER_WHEEL, size: { w: 80, h: 80 }, draw: (g, s) => rollerWheel(g, s) },
+    motor: { center: { x: -106, y: -131 }, size: { w: 84, h: 78 }, draw: rollerMotor },
+    hus: { center: { x: -15, y: -155 }, size: { w: 86, h: 122 }, draw: rollerCab },
+  },
+  pael: {
+    baelter: { center: { x: 0, y: -25 }, size: { w: 224, h: 50 }, draw: gravkoTracks },
+    krop: { center: { x: -7, y: -88 }, size: { w: 206, h: 76 }, draw: pileBody },
+    hus: { center: { x: 10, y: -161 }, size: { w: 92, h: 82 }, draw: pileCab },
+    mast: { center: { x: 86, y: -211 }, size: { w: 104, h: 411 }, draw: pileMast },
+    lod: {
+      center: { x: MAST_X, y: HAMMER_REST - HAMMER_H / 2 },
+      size: { w: 44, h: HAMMER_H },
+      draw: (g, s) => drawHammer(g, HAMMER_REST, s),
+    },
+  },
+  taarnkran: {
+    fod: { center: { x: 0, y: -19 }, size: { w: 144, h: 38 }, draw: towerFoot },
+    taarn: { center: { x: 0, y: -228 }, size: { w: 44, h: 392 }, draw: towerMast },
+    top: { center: { x: 22, y: -458 }, size: { w: 100, h: 128 }, draw: towerTop },
+    udligger: { center: { x: 226, y: -449 }, size: { w: 420, h: 26 }, draw: towerJib },
+    vaegt: { center: { x: -93, y: -430 }, size: { w: 154, h: 56 }, draw: towerCounter },
+    krog: {
+      center: { x: TROLLEY_REST, y: -405 },
+      size: { w: 40, h: 80 },
+      draw: (g, s) => drawTowerHook(g, { x: TROLLEY_REST, y: TOWER_HOOK_REST }, s),
+    },
+  },
 };
 
 /**
@@ -544,6 +885,9 @@ export const DRAW_ORDER: Record<MachineId, string[]> = {
   lastbil: ['ramme', 'hjul', 'lad', 'hus'],
   betonbil: ['ramme', 'hjul', 'rende', 'tromle', 'hus'],
   kran: ['ramme', 'hjul', 'bom', 'krog', 'drej', 'hus'],
+  vejtromle: ['hjul', 'tromle', 'ramme', 'motor', 'hus'],
+  pael: ['baelter', 'mast', 'lod', 'krop', 'hus'],
+  taarnkran: ['fod', 'taarn', 'vaegt', 'udligger', 'krog', 'top'],
 };
 
 /** Where the filler caps and the third job's spots are, in machine coordinates. */
@@ -568,6 +912,24 @@ export const SERVICE: Record<MachineId, { diesel: Pt; oil: Pt; extra: Pt[] }> = 
     oil: { x: 112, y: -82 },
     extra: [BOOM_ROOT, { x: -100, y: -75 }, { x: 18, y: -75 }],
   },
+  vejtromle: {
+    diesel: { x: -24, y: -80 },
+    oil: { x: -122, y: -116 },
+    // two sprinklers on the drum's hood, one over the back tyre
+    extra: [{ x: 48, y: -132 }, { x: 138, y: -132 }, { x: -92, y: -90 }],
+  },
+  pael: {
+    diesel: { x: -30, y: -96 },
+    oil: { x: 72, y: -100 },
+    // the lamp at the top of the mast, the beacon on the cab, the light at the back
+    extra: [{ x: MAST_X, y: MAST_TOP + 30 }, { x: 10, y: -214 }, { x: -104, y: -100 }],
+  },
+  taarnkran: {
+    diesel: { x: -44, y: -14 },
+    oil: { x: 0, y: -200 },
+    // a flag on the peak and one at each end of the jib, the way a topping-out looks
+    extra: [{ x: PEAK.x, y: PEAK.y - 10 }, { x: JIB_END - 10, y: JIB_Y - 34 }, { x: COUNTER_END + 20, y: JIB_Y - 32 }],
+  },
 };
 
 export interface Pose {
@@ -578,7 +940,12 @@ export interface Pose {
   chuteTip?: Pt;
   wetChute?: boolean;
   boomTip?: Pt;
+  /** The crane's hook; on the tower crane, its x is also where the trolley is. */
   hook?: Pt;
+  /** How far the roller's drum and wheel have turned, in radians. */
+  rollPhase?: number;
+  /** The pile driver's hammer: where its bottom edge is, in machine coordinates. */
+  hammer?: number;
 }
 
 /**
@@ -607,10 +974,19 @@ export function drawMachine(
       drawCraneBoom(g, pose.boomTip);
     } else if (id === 'kran' && part === 'krog' && pose.boomTip) {
       drawHook(g, pose.boomTip, pose.hook ?? { x: pose.boomTip.x, y: pose.boomTip.y + HOOK_DROP });
+    } else if (id === 'vejtromle' && part === 'tromle' && pose.rollPhase !== undefined) {
+      rollerDrum(g, REAL, pose.rollPhase);
+    } else if (id === 'vejtromle' && part === 'hjul' && pose.rollPhase !== undefined) {
+      rollerWheel(g, REAL, pose.rollPhase * (ROLLER_DRUM_R / 40));
+    } else if (id === 'pael' && part === 'lod' && pose.hammer !== undefined) {
+      drawHammer(g, pose.hammer);
+    } else if (id === 'taarnkran' && part === 'krog' && pose.hook) {
+      drawTowerHook(g, pose.hook);
     } else {
       ART[id][part].draw(g, REAL);
     }
   }
+  if (id === 'taarnkran') towerTies(g, has);
 }
 
 /**

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS, INK, LINE, SIZE, text } from '../config';
 import { gameState } from '../state/GameState';
-import { EXTRA_SPOTS, MACHINES, MachineId } from '../state/Machines';
+import { EXTRA_SPOTS, ExtraKind, MACHINES, MachineId } from '../state/Machines';
 import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
 import { button, plate, progressBar, shade, shadow, sheen, tappable } from '../helpers/Draw';
 import { dur, popIn, reduceMotion } from '../helpers/Motion';
@@ -11,7 +11,8 @@ import {
   showCheckmark, showConfetti, showPraise, showSparkle, showSplash, showToast,
 } from '../objects/FeedbackEffects';
 import { SERVICE, drawMachine, machineBounds } from '../objects/MachineArt';
-import { FLOOR_Y, workshopBackdrop } from '../objects/SiteArt';
+import { drawFlag } from '../objects/TownArt';
+import { floorY, workshopBackdrop } from '../objects/SiteArt';
 import { Pointer, drawTargetZone } from '../ui/Guide';
 import { BaseScene } from './BaseScene';
 
@@ -59,10 +60,17 @@ export class PrepScene extends BaseScene {
     this.celebrated = gameState.isReady(this.machine);
   }
 
+  /* The layout, written for the 880×550 stage and moved to the middle of this one. */
+  private get floor(): number { return floorY(this); }
+  private get pump() { return { x: PUMP.x + this.dx, top: PUMP.top + this.dy }; }
+  private get nozzleHome() { return { x: NOZZLE_HOME.x + this.dx, y: NOZZLE_HOME.y + this.dy }; }
+  private get canHome() { return { x: CAN_HOME.x + this.dx, y: CAN_HOME.y + this.dy }; }
+  private get goAt() { return { x: GO.x + this.dx, y: GO.y + this.dy }; }
+
   create(): void {
     const b = machineBounds(this.machine);
     this.scaleM = Math.min(0.92, 520 / b.w, 260 / b.h);
-    this.origin = { x: 560 - (b.x + b.w / 2) * this.scaleM, y: FLOOR_Y - 6 };
+    this.origin = { x: 560 + this.dx - (b.x + b.w / 2) * this.scaleM, y: this.floor - 6 };
 
     super.create();
 
@@ -91,7 +99,7 @@ export class PrepScene extends BaseScene {
 
   protected buildDynamic(): void {
     if (!gameState.isBuilt(this.machine)) {
-      this.dyn(button(this, 480, 300, 'Byg den først', COLORS.orange,
+      this.dyn(button(this, this.scale.width / 2, 300 + this.dy, 'Byg den først', COLORS.orange,
         () => this.goTo('AssembleScene', { machine: this.machine }), 240, 56));
       return;
     }
@@ -133,12 +141,12 @@ export class PrepScene extends BaseScene {
       }
       if (needs.diesel) {
         glow(this.at(SERVICE[this.machine].diesel), 26);
-        pointer.point(NOZZLE_HOME.x, NOZZLE_HOME.y - 18);
+        pointer.point(this.nozzleHome.x, this.nozzleHome.y - 18);
         return;
       }
       if (needs.oil) {
         glow(this.at(SERVICE[this.machine].oil), 26);
-        pointer.point(CAN_HOME.x - 10, CAN_HOME.y - 50);
+        pointer.point(this.canHome.x - 10, this.canHome.y - 50);
         return;
       }
       const spot = gameState.machines[this.machine].extra.findIndex(done => !done);
@@ -147,7 +155,7 @@ export class PrepScene extends BaseScene {
         pointer.point(p.x, p.y - 26);
         return;
       }
-      if (gameState.isReady(this.machine)) pointer.point(GO.x, GO.y - 34);
+      if (gameState.isReady(this.machine)) pointer.point(this.goAt.x, this.goAt.y - 34);
       else pointer.hide();
     });
   }
@@ -167,7 +175,7 @@ export class PrepScene extends BaseScene {
     ];
 
     items.forEach((item, i) => {
-      const x = 290 + i * 200;
+      const x = this.scale.width / 2 - 150 + i * 200;
       const y = 100;
       const g = this.dyn(this.add.graphics());
       shadow(g, x - 92, y - 26, 184, 52, 14, 3, 0.16);
@@ -243,12 +251,7 @@ export class PrepScene extends BaseScene {
       const g = this.add.graphics();
       c.add(g);
       if (done[i]) {
-        if (def.extra.kind === 'grease') {
-          g.fillStyle(COLORS.rubber);
-          g.fillCircle(0, 0, 6);
-          g.fillStyle(COLORS.white, 0.6);
-          g.fillCircle(-2, -2, 2);
-        }
+        this.drawExtraDone(g, def.extra.kind);
         return;
       }
       // a bright halo behind the spot, so it stands out against the machine's yellow
@@ -266,7 +269,41 @@ export class PrepScene extends BaseScene {
     });
   }
 
-  private drawExtraIcon(g: Phaser.GameObjects.Graphics, kind: 'grease' | 'tyre' | 'mud' | 'bolt'): void {
+  /** What a finished spot leaves behind: a greased nipple, a lit lamp, a flag flying. */
+  private drawExtraDone(g: Phaser.GameObjects.Graphics, kind: ExtraKind): void {
+    switch (kind) {
+      case 'grease':
+        g.fillStyle(COLORS.rubber);
+        g.fillCircle(0, 0, 6);
+        g.fillStyle(COLORS.white, 0.6);
+        g.fillCircle(-2, -2, 2);
+        break;
+      case 'lamp':
+        g.fillStyle(COLORS.sun, 0.35);
+        g.fillCircle(0, 0, 20);
+        this.drawBulb(g, COLORS.sun);
+        break;
+      case 'flag':
+        drawFlag(g, 0, 0);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private drawBulb(g: Phaser.GameObjects.Graphics, color: number): void {
+    g.fillStyle(COLORS.outline);
+    g.fillRoundedRect(-6, 4, 12, 9, 3);
+    g.fillCircle(0, -2, 11);
+    g.fillStyle(color);
+    g.fillCircle(0, -2, 9);
+    g.fillStyle(COLORS.white, 0.6);
+    g.fillCircle(-3, -5, 3);
+    g.fillStyle(COLORS.steelLight);
+    g.fillRoundedRect(-4.5, 5, 9, 6, 2);
+  }
+
+  private drawExtraIcon(g: Phaser.GameObjects.Graphics, kind: ExtraKind): void {
     switch (kind) {
       case 'grease':
         // a grease nipple
@@ -309,6 +346,29 @@ export class PrepScene extends BaseScene {
         g.fillCircle(0, 0, 3.5);
         break;
       }
+      case 'water':
+        // a dry, dusty spot that wants a squirt of water
+        g.fillStyle(COLORS.outline);
+        g.fillCircle(0, 2, 13);
+        g.fillTriangle(-11, -3, 11, -3, 0, -18);
+        g.fillStyle(COLORS.water);
+        g.fillCircle(0, 2, 11);
+        g.fillTriangle(-9, -2, 9, -2, 0, -15);
+        g.fillStyle(COLORS.white, 0.6);
+        g.fillCircle(-4, 0, 3.5);
+        break;
+      case 'lamp':
+        this.drawBulb(g, COLORS.stone);
+        break;
+      case 'flag':
+        // the flagpole, waiting for its flag
+        g.fillStyle(COLORS.outline);
+        g.fillRoundedRect(-3, -16, 6, 30, 3);
+        g.fillStyle(COLORS.steelLight);
+        g.fillRoundedRect(-1.5, -15, 3, 28, 1.5);
+        g.fillStyle(COLORS.sun);
+        g.fillCircle(0, -17, 3.5);
+        break;
     }
   }
 
@@ -317,6 +377,7 @@ export class PrepScene extends BaseScene {
     const kind = MACHINES[this.machine].extra.kind;
     if (kind === 'grease' || kind === 'bolt') audio.ratchet();
     else if (kind === 'tyre') audio.pump();
+    else if (kind === 'lamp' || kind === 'flag') audio.pop();
     else {
       audio.wash();
       showSplash(this, p.x, p.y);
@@ -334,10 +395,10 @@ export class PrepScene extends BaseScene {
 
   private drawPump(): Phaser.GameObjects.Graphics {
     const g = this.add.graphics();
-    const { x, top } = PUMP;
-    shadow(g, x - 34, top, 68, FLOOR_Y - top, 10, 5, 0.2);
-    plate(g, x - 34, top, 68, FLOOR_Y - top, 10, COLORS.diesel, 1, 3);
-    sheen(g, x - 34, top, 68, FLOOR_Y - top, 10, 0.3);
+    const { x, top } = this.pump;
+    shadow(g, x - 34, top, 68, this.floor - top, 10, 5, 0.2);
+    plate(g, x - 34, top, 68, this.floor - top, 10, COLORS.diesel, 1, 3);
+    sheen(g, x - 34, top, 68, this.floor - top, 10, 0.3);
     plate(g, x - 24, top + 16, 48, 34, 6, COLORS.cream, 1, 2);
     g.fillStyle(COLORS.outline);
     g.fillRect(x - 16, top + 26, 32, 4);
@@ -361,7 +422,7 @@ export class PrepScene extends BaseScene {
       if (this.dragging === 'oil') can.setPosition(this.pointer.x, this.pointer.y);
 
       // hose from the pump to the nozzle, sagging a little
-      const from = { x: PUMP.x + 26, y: PUMP.top + 40 };
+      const from = { x: this.pump.x + 26, y: this.pump.top + 40 };
       const to = { x: nozzle.x - 18, y: nozzle.y + 6 };
       const sag = { x: (from.x + to.x) / 2, y: Math.max(from.y, to.y) + 60 };
       const curve = new Phaser.Curves.QuadraticBezier(
@@ -398,7 +459,7 @@ export class PrepScene extends BaseScene {
   }
 
   private makeNozzle(): Phaser.GameObjects.Container {
-    const c = this.dyn(this.add.container(NOZZLE_HOME.x, NOZZLE_HOME.y)).setName('tool:diesel');
+    const c = this.dyn(this.add.container(this.nozzleHome.x, this.nozzleHome.y)).setName('tool:diesel');
     const g = this.add.graphics();
     // handle and spout, pointing right
     plate(g, -22, -8, 30, 20, 6, COLORS.diesel, 1, 2.5);
@@ -412,7 +473,7 @@ export class PrepScene extends BaseScene {
   }
 
   private makeCan(): Phaser.GameObjects.Container {
-    const c = this.dyn(this.add.container(CAN_HOME.x, CAN_HOME.y)).setName('tool:oil');
+    const c = this.dyn(this.add.container(this.canHome.x, this.canHome.y)).setName('tool:oil');
     const g = this.add.graphics();
     shadow(g, -20, -26, 40, 52, 8, 3, 0.18);
     plate(g, -20, -26, 40, 52, 8, COLORS.oil, 1, 2.5);
@@ -429,8 +490,8 @@ export class PrepScene extends BaseScene {
     g.fillStyle(COLORS.oil);
     g.fillCircle(0, 5, 4);
     c.add(g);
-    this.dyn(this.add.text(CAN_HOME.x, CAN_HOME.y + 42, 'Olie', text(SIZE.label, INK, 'bold')).setOrigin(0.5));
-    this.dyn(this.add.text(PUMP.x, FLOOR_Y + 20, 'Diesel', text(SIZE.label, INK, 'bold')).setOrigin(0.5));
+    this.dyn(this.add.text(this.canHome.x, this.canHome.y + 42, 'Olie', text(SIZE.label, INK, 'bold')).setOrigin(0.5));
+    this.dyn(this.add.text(this.pump.x, this.floor + 20, 'Diesel', text(SIZE.label, INK, 'bold')).setOrigin(0.5));
     c.setSize(64, 76).setInteractive({ useHandCursor: true });
     c.on('pointerdown', (p: Phaser.Input.Pointer) => this.pickUp('oil', p));
     return c;
@@ -455,7 +516,7 @@ export class PrepScene extends BaseScene {
     gameState.save();
     const name = tool === 'diesel' ? 'tool:diesel' : 'tool:oil';
     const c = this.dynamic.getByName(name) as Phaser.GameObjects.Container | null;
-    const home = tool === 'diesel' ? NOZZLE_HOME : CAN_HOME;
+    const home = tool === 'diesel' ? this.nozzleHome : this.canHome;
     if (c) {
       c.setAngle(0);
       this.tweens.add({ targets: c, x: home.x, y: home.y, duration: dur(240), ease: 'Quad.easeOut' });
@@ -483,7 +544,7 @@ export class PrepScene extends BaseScene {
   private buildGo(): void {
     const route = nextRoute();
     const toSite = gameState.stage.machine === this.machine && route.scene === gameState.stage.scene;
-    const go = button(this, GO.x, GO.y, toSite ? 'Kør på arbejde!' : 'Videre!', COLORS.green, () => {
+    const go = button(this, this.goAt.x, this.goAt.y, toSite ? 'Kør på arbejde!' : 'Videre!', COLORS.green, () => {
       audio.horn();
       this.goTo(route.scene, route.data);
     }, 240, 56, SIZE.heading);

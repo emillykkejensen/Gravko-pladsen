@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DEPTH } from '../config';
+import { DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { dur, transition } from '../helpers/Motion';
 import { flatten } from '../helpers/Flatten';
 
@@ -24,6 +24,11 @@ import { flatten } from '../helpers/Flatten';
  * Machines that move every frame (an excavator arm following a finger, a drum turning) are
  * drawn by an `everyFrame` updater into a Graphics that lives in the dynamic layer, rather
  * than by refreshing the whole layer at frame rate.
+ *
+ * The stage takes the screen's shape (helpers/Stage), so a scene is never drawn at a fixed
+ * 880×550. Scenery runs across the whole width, the chrome hangs off the edges, and the
+ * scene's own layout — written for 880×550 — is centred across and stood on the bottom:
+ * add `dx` to a design x and `dy` to a design y. A taller stage, a tablet, gets more sky.
  */
 export abstract class BaseScene extends Phaser.Scene {
   protected background!: Phaser.GameObjects.Container;
@@ -32,6 +37,16 @@ export abstract class BaseScene extends Phaser.Scene {
 
   /** Per-frame updates that must survive until the next refresh. */
   private updaters: ((dt: number) => void)[] = [];
+
+  /** How far to move a design x so the 880-wide layout sits in the middle of the stage. */
+  protected get dx(): number {
+    return Math.round((this.scale.width - GAME_WIDTH) / 2);
+  }
+
+  /** How far to move a design y so the 550-tall layout stands on the bottom of the stage. */
+  protected get dy(): number {
+    return this.scale.height - GAME_HEIGHT;
+  }
 
   create(): void {
     this.cameras.main.fadeIn(dur(260));
