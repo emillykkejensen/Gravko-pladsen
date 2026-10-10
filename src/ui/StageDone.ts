@@ -14,7 +14,7 @@ export function stageDoneButton(
   scene: Phaser.Scene,
   add: <T extends Phaser.GameObjects.GameObject>(o: T) => T,
   x = scene.scale.width / 2,
-  y = 500
+  y = scene.scale.height - 50
 ): Phaser.GameObjects.Container {
   const go = button(scene, x, y, 'Videre!', COLORS.green, () => {
     const route = nextRoute();

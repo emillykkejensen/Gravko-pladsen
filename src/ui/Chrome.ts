@@ -128,7 +128,8 @@ export function addStarCounter(scene: Phaser.Scene): Phaser.GameObjects.Containe
     .setOrigin(0, 0.5);
   c.add(count);
 
-  const info = rankFor(gameState.stars);
+  // the rank counts every star ever earned, so a trip to the shop never takes one away
+  const info = rankFor(gameState.earned);
   const rankLabel = scene.add.text(-2, -12, info.name, text(SIZE.tiny, INK_SOFT, 'bold'))
     .setOrigin(0, 0.5);
   c.add(rankLabel);
@@ -165,7 +166,7 @@ export function addStarCounter(scene: Phaser.Scene): Phaser.GameObjects.Containe
   const onChange = (value: number) => {
     if (!count.active) return;
     count.setText(`${value}`);
-    const next = rankFor(value);
+    const next = rankFor(gameState.earned);
     rankLabel.setText(next.name);
 
     if (reduceMotion()) {
@@ -204,9 +205,9 @@ export function addStarCounter(scene: Phaser.Scene): Phaser.GameObjects.Containe
  * which is what connects the reward to the thing that produced it.
  */
 export function award(scene: Phaser.Scene, count = 1, x?: number, y?: number): void {
-  const before = rankFor(gameState.stars).index;
+  const before = rankFor(gameState.earned).index;
   gameState.addStars(count);
-  const after = rankFor(gameState.stars);
+  const after = rankFor(gameState.earned);
 
   scene.events.emit('starsChanged', gameState.stars);
   audio.star(count);
@@ -240,7 +241,7 @@ export function addSceneTitle(
   const c = ribbon(scene, scene.scale.width / 2, y, label, color);
   c.setDepth(DEPTH.chrome);
 
-  const maxWidth = TITLE_MAX_WIDTH;
+  const maxWidth = scene.scale.width - TITLE_MARGIN;
   if (c.width > maxWidth) c.setScale(maxWidth / c.width);
 
   bob(scene, c, 3, 2600);
@@ -248,7 +249,8 @@ export function addSceneTitle(
 }
 
 /**
- * How wide a scene title may be: the band between the back button (which ends at x≈150)
- * and the star counter (which starts at x≈656), with a little margin.
+ * How much of the stage's width a scene title must leave free: the back button on the left
+ * (which ends at x≈150) and the star counter on the right (which starts ≈224 from the
+ * edge), with a little margin. On the 880 stage that leaves a title 470 wide.
  */
-const TITLE_MAX_WIDTH = 470;
+const TITLE_MARGIN = 410;

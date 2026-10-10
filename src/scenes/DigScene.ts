@@ -7,7 +7,7 @@ import { dur } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
 import { showConfetti, showPraise } from '../objects/FeedbackEffects';
 import { ArmPose, GRAVKO_REST, Pt, drawMachine } from '../objects/MachineArt';
-import { GROUND_Y, drawGround, drawHole, siteSky, siteWeather } from '../objects/SiteArt';
+import { drawGround, drawHole, drawPilesUnder, groundY, holeFor, siteSky, siteWeather } from '../objects/SiteArt';
 import { stageDoneButton } from '../ui/StageDone';
 import { Pointer, drawTargetZone, hintBanner } from '../ui/Guide';
 import { BaseScene } from './BaseScene';
@@ -30,7 +30,6 @@ const HOLE_X = 342;
 const HEAP_X = 70;
 /** A full bucket anywhere left of this, above the ground, empties onto the heap. */
 const DUMP_RIGHT = 170;
-const DUMP_TOP = GROUND_Y - 190;
 
 /**
  * Digging the hole.
@@ -79,16 +78,30 @@ export class DigScene extends BaseScene {
     this.input.on('pointermove', steer);
   }
 
+  /* The layout, written for the 880×550 stage and moved to the middle of this one. */
+  private get gy(): number { return groundY(this); }
+  private get baseX(): number { return BASE_X + this.dx; }
+  private get holeX(): number { return HOLE_X + this.dx; }
+  private get heapX(): number { return HEAP_X + this.dx; }
+  private get dumpRight(): number { return DUMP_RIGHT + this.dx; }
+  private get dumpTop(): number { return this.gy - 190; }
+
   private get hole() {
     const p = gameState.currentProject;
-    return { x: HOLE_X, y: GROUND_Y, w: p.holeCols * CHUNK_W, h: p.holeRows * CHUNK_H };
+    return { x: this.holeX, y: this.gy, w: p.holeCols * CHUNK_W, h: p.holeRows * CHUNK_H };
   }
 
   protected buildBackground(): void {
     const { width, height } = this.scale;
     siteSky(this, o => this.bg(o));
     const g = this.add.graphics();
-    drawGround(g, width, height);
+    drawGround(g, width, height, this.gy);
+    // the piles banked in before digging, reaching down under where the hole will be
+    const piles = gameState.currentProject.piles;
+    if (piles > 0) {
+      const hole = this.hole;
+      drawPilesUnder(g, { ...holeFor(gameState.currentProject.pourCells, hole.x + hole.w / 2, this.gy), h: hole.h }, piles);
+    }
     this.bg(g);
   }
 
@@ -105,11 +118,11 @@ export class DigScene extends BaseScene {
   /** Points the bucket's teeth at a spot on screen. */
   private steer(x: number, y: number): void {
     // turn round when the finger goes behind the cab
-    if (this.face === 1 && x < BASE_X - 30) this.face = -1;
-    else if (this.face === -1 && x > BASE_X + 30) this.face = 1;
+    if (this.face === 1 && x < this.baseX - 30) this.face = -1;
+    else if (this.face === -1 && x > this.baseX + 30) this.face = 1;
     this.goal = {
-      x: (x - BASE_X) / (S * this.face),
-      y: (y - GROUND_Y) / S - TIP,
+      x: (x - this.baseX) / (S * this.face),
+      y: (y - this.gy) / S - TIP,
     };
   }
 
@@ -141,12 +154,12 @@ export class DigScene extends BaseScene {
       if (gameState.holeDug) drawHole(earth, hole);
       // pegs and string marking out the hole
       earth.lineStyle(2, COLORS.white, 0.95);
-      earth.lineBetween(hole.x - 4, GROUND_Y - 14, hole.x + hole.w + 4, GROUND_Y - 14);
+      earth.lineBetween(hole.x - 4, this.gy - 14, hole.x + hole.w + 4, this.gy - 14);
       earth.fillStyle(COLORS.orange);
       for (const px of [hole.x - 6, hole.x + hole.w + 2]) {
-        earth.fillRect(px, GROUND_Y - 22, 5, 22);
+        earth.fillRect(px, this.gy - 22, 5, 22);
         earth.lineStyle(1.5, COLORS.outline);
-        earth.strokeRect(px, GROUND_Y - 22, 5, 22);
+        earth.strokeRect(px, this.gy - 22, 5, 22);
       }
     };
     drawEarth();
@@ -161,16 +174,16 @@ export class DigScene extends BaseScene {
       const h = 14 + (n / total) * 70;
       const w = 70 + (n / total) * 90;
       heap.fillStyle(COLORS.dirtDeep);
-      heap.fillEllipse(HEAP_X, GROUND_Y, w + 8, h * 2 + 8);
+      heap.fillEllipse(this.heapX, this.gy, w + 8, h * 2 + 8);
       heap.fillStyle(COLORS.dirt);
-      heap.fillEllipse(HEAP_X - 4, GROUND_Y - 3, w, h * 2);
+      heap.fillEllipse(this.heapX - 4, this.gy - 3, w, h * 2);
       heap.fillStyle(COLORS.dirtLight);
-      heap.fillEllipse(HEAP_X - 14, GROUND_Y - h * 0.7, w * 0.3, h * 0.4);
+      heap.fillEllipse(this.heapX - 14, this.gy - h * 0.7, w * 0.3, h * 0.4);
       heap.lineStyle(2.5, COLORS.outline, 0.9);
-      heap.strokeEllipse(HEAP_X, GROUND_Y, w + 8, h * 2 + 8);
+      heap.strokeEllipse(this.heapX, this.gy, w + 8, h * 2 + 8);
       // ground hides the bottom half of the ellipse
       heap.fillStyle(COLORS.grass);
-      heap.fillRect(HEAP_X - w, GROUND_Y - 2, w * 2, 8);
+      heap.fillRect(this.heapX - w, this.gy - 2, w * 2, 8);
     };
     drawHeap();
 
@@ -178,9 +191,9 @@ export class DigScene extends BaseScene {
     const zone = this.dyn(this.add.graphics());
 
     // the machine: tracks stay put, the upper body turns round
-    const tracks = this.dyn(this.add.graphics().setPosition(BASE_X, GROUND_Y).setScale(S));
+    const tracks = this.dyn(this.add.graphics().setPosition(this.baseX, this.gy).setScale(S));
     drawMachine(tracks, 'gravko', ['baelter']);
-    const upper = this.dyn(this.add.graphics().setPosition(BASE_X, GROUND_Y).setScale(S));
+    const upper = this.dyn(this.add.graphics().setPosition(this.baseX, this.gy).setScale(S));
 
     let hint: Phaser.GameObjects.Container | null = null;
     const setHint = () => {
@@ -225,8 +238,8 @@ export class DigScene extends BaseScene {
         return;
       }
       if (this.carried > 0) {
-        drawTargetZone(zone, this, 12, DUMP_TOP, DUMP_RIGHT - 12, GROUND_Y - 6 - DUMP_TOP);
-        pointer.point(HEAP_X + 10, GROUND_Y - 70);
+        drawTargetZone(zone, this, this.dx + 12, this.dumpTop, DUMP_RIGHT - 12, this.gy - 6 - this.dumpTop);
+        pointer.point(this.heapX + 10, this.gy - 70);
       } else {
         const next = this.nextChunk();
         if (next) pointer.point(next.x, next.y);
@@ -244,7 +257,7 @@ export class DigScene extends BaseScene {
           updateProgress();
           setHint();
         }
-      } else if (tip.x < DUMP_RIGHT && tip.y < GROUND_Y - 6) {
+      } else if (tip.x < this.dumpRight && tip.y < this.gy - 6) {
         this.carried = 0;
         this.bucket = -0.6;
         audio.dump();
@@ -299,7 +312,7 @@ export class DigScene extends BaseScene {
     // the teeth, rotated with the bucket, in machine coordinates
     const tx = pose.wrist.x - Math.sin(pose.bucket) * TIP;
     const ty = pose.wrist.y + Math.cos(pose.bucket) * TIP;
-    return { x: BASE_X + tx * S * this.face, y: GROUND_Y + ty * S };
+    return { x: this.baseX + tx * S * this.face, y: this.gy + ty * S };
   }
 
   private chunkAt(tip: Pt): number {
@@ -342,7 +355,7 @@ export class DigScene extends BaseScene {
       audio.horn();
       showConfetti(this, hole.x + hole.w / 2, 260, 36);
       showPraise(this, hole.x + hole.w / 2, 220, 'Hullet er gravet!');
-      award(this, 3, hole.x + hole.w / 2, GROUND_Y);
+      award(this, 3, hole.x + hole.w / 2, this.gy);
       stageDoneButton(this, o => this.dyn(o));
     });
   }

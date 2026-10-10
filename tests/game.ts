@@ -6,14 +6,27 @@ type Tally = { contexts: number; oscillators: number; buffers: number };
 
 type Pt = { x: number; y: number };
 
-export const SAVE_KEY = 'gravko-spil-save';
+/**
+ * Storage keys, restated here rather than imported. Renaming one in the game would strand
+ * every child's town on every device, so a test should break when that happens.
+ */
+export const PROFILES_KEY = 'gravko-spil-profiles';
+export const LEGACY_SAVE_KEY = 'gravko-spil-save';
+export const saveKeyFor = (id: string) => `${LEGACY_SAVE_KEY}:${id}`;
 
-const ALL_PARTS: Record<string, string[]> = {
+export interface TestProfile { id: string; name: string; avatar: string }
+
+export const ALL_PARTS: Record<string, string[]> = {
   gravko: ['baelter', 'krop', 'hus', 'bom', 'arm', 'skovl'],
   lastbil: ['hjul', 'ramme', 'hus', 'lad'],
   betonbil: ['hjul', 'ramme', 'hus', 'tromle', 'rende'],
   kran: ['hjul', 'ramme', 'hus', 'drej', 'bom', 'krog'],
+  vejtromle: ['tromle', 'ramme', 'hjul', 'motor', 'hus'],
+  pael: ['baelter', 'krop', 'hus', 'mast', 'lod'],
+  taarnkran: ['fod', 'taarn', 'top', 'udligger', 'vaegt', 'krog'],
 };
+
+export const MACHINE_IDS = Object.keys(ALL_PARTS);
 
 /** A machine that is built, full and ready for work. */
 export const readyMachine = (id: string) => ({
@@ -23,16 +36,15 @@ export const readyMachine = (id: string) => ({
 /** A machine nobody has started building. */
 export const emptyMachine = () => ({ parts: [], diesel: 0, oil: 0, extra: [false, false, false] });
 
-/** A save with every machine ready, at the given stage of the first project. */
-export function readySave(site: Partial<{ stage: number; dug: number[]; gravel: number; poured: number[]; placed: number }> = {}, patch: Record<string, unknown> = {}) {
+type Site = Partial<{
+  stage: number; dug: number[]; gravel: number; rolled: number[]; poured: number[]; placed: number; piles: number[];
+}>;
+
+/** A save with every machine ready, at the given stage of the first project (or `patch.project`). */
+export function readySave(site: Site = {}, patch: Record<string, unknown> = {}) {
   return {
-    machines: {
-      gravko: readyMachine('gravko'),
-      lastbil: readyMachine('lastbil'),
-      betonbil: readyMachine('betonbil'),
-      kran: readyMachine('kran'),
-    },
-    site: { stage: 0, dug: [], gravel: 0, poured: [], placed: 0, ...site },
+    machines: Object.fromEntries(MACHINE_IDS.map(id => [id, readyMachine(id)])),
+    site: { stage: 0, dug: [], gravel: 0, rolled: [], poured: [], placed: 0, piles: [], ...site },
     ...patch,
   };
 }
@@ -59,38 +71,71 @@ export class Game {
     });
   }
 
+  /** The one player most tests play as. */
+  static readonly PLAYER: TestProfile = { id: 'p1', name: 'Alma', avatar: 'kat' };
+
+  /** A fresh game: one player, who has not played yet. */
   static async open(page: Page): Promise<Game> {
-    const game = new Game(page);
-    // Reduced motion collapses fades and the press squash, so the suite is not gated on
-    // animation time under software WebGL.
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.addInitScript(() => window.localStorage.clear());
-    await Game.installAudioSpy(page);
-    await page.goto('/');
-    await game.waitForScene('MainMenuScene');
-    return game;
+    return Game.openWithStorage(page, Game.players([Game.PLAYER]));
   }
 
-  /** Opens the game on a prepared save. Sound is on and music off unless the patch says. */
+  /**
+   * Opens the game with that one player on a prepared save. Sound is on and music off
+   * unless the patch says.
+   */
   static async openWithSave(page: Page, patch: Record<string, unknown>): Promise<Game> {
-    const game = new Game(page);
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await Game.installAudioSpy(page);
-    await page.addInitScript(([key, seed]) => {
-      window.localStorage.setItem(key as string, JSON.stringify(seed));
-    }, [SAVE_KEY, {
-      version: 1,
+    return Game.openWithStorage(page, {
+      ...Game.players([Game.PLAYER]),
+      [saveKeyFor(Game.PLAYER.id)]: Game.saveWith(patch),
+    });
+  }
+
+  /** A whole save in the current format, with `patch` laid over a new game. */
+  static saveWith(patch: Record<string, unknown>): Record<string, unknown> {
+    return {
+      version: 2,
       stars: 0,
-      machines: {
-        gravko: emptyMachine(), lastbil: emptyMachine(), betonbil: emptyMachine(), kran: emptyMachine(),
-      },
+      machines: Object.fromEntries(MACHINE_IDS.map(id => [id, emptyMachine()])),
       project: 0,
-      site: { stage: 0, dug: [], gravel: 0, poured: [], placed: 0 },
+      site: { stage: 0, dug: [], gravel: 0, rolled: [], poured: [], placed: 0, piles: [] },
       town: [],
       // music off: a continuous pad would pollute the audio counts
       settings: { sound: true, music: false },
       ...patch,
-    }] as const);
+    };
+  }
+
+  /** A profile index listing these players, with `last` as whoever played last. */
+  static players(profiles: TestProfile[], last: string | null = profiles[0]?.id ?? null): Record<string, unknown> {
+    return { [PROFILES_KEY]: { version: 1, profiles, last } };
+  }
+
+  /** Numbers every seed, so a page that is opened twice gets the second one. */
+  private static seeds = 0;
+
+  /**
+   * Opens the game on exactly this localStorage.
+   *
+   * Seeded once per call rather than on every load, so a test can reload the page — which is
+   * what closing the game and opening it again looks like — and find what it left behind.
+   * Init scripts cannot be removed and all of them run on every load, so each seed carries
+   * a number and only writes when it is newer than the last one applied.
+   */
+  static async openWithStorage(page: Page, entries: Record<string, unknown>): Promise<Game> {
+    const game = new Game(page);
+    // Reduced motion collapses fades and the press squash, so the suite is not gated on
+    // animation time under software WebGL.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await Game.installAudioSpy(page);
+    await page.addInitScript(([seed, generation]) => {
+      const applied = Number(window.sessionStorage.getItem('__seeded') ?? 0);
+      if (generation <= applied) return;
+      window.sessionStorage.setItem('__seeded', String(generation));
+      window.localStorage.clear();
+      for (const [key, value] of Object.entries(seed)) {
+        window.localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+      }
+    }, [entries, ++Game.seeds] as const);
     await page.goto('/');
     await game.waitForScene('MainMenuScene');
     return game;
@@ -134,10 +179,23 @@ export class Game {
 
   /* ---------------------------------------------------------------- pointer --- */
 
+  /**
+   * Game coordinates to page pixels.
+   *
+   * The stage takes the screen's shape, so it is only GAME_WIDTH × GAME_HEIGHT at the 1.6
+   * the suite runs at; reading the live size keeps a tap honest on a phone-shaped viewport
+   * too. The `AT` table itself is written for the 1.6 stage.
+   */
   private async screen(gx: number, gy: number): Promise<Pt> {
     const box = await this.page.locator('canvas').boundingBox();
     if (!box) throw new Error('canvas not found');
-    return { x: box.x + (gx / GAME_WIDTH) * box.width, y: box.y + (gy / GAME_HEIGHT) * box.height };
+    const size = await this.page.evaluate(() => {
+      const g = (window as any).__game;
+      return g ? { w: g.scale.gameSize.width, h: g.scale.gameSize.height } : null;
+    });
+    const w = size?.w ?? GAME_WIDTH;
+    const h = size?.h ?? GAME_HEIGHT;
+    return { x: box.x + (gx / w) * box.width, y: box.y + (gy / h) * box.height };
   }
 
   async tap(gx: number, gy: number): Promise<void> {
@@ -219,9 +277,9 @@ export class Game {
     await this.waitForScene(key);
   }
 
-  /** Title screen to town. */
-  async start(): Promise<void> {
-    await this.tap(AT.play.x, AT.play.y);
+  /** Title screen to town, as the seeded player: their card on the title screen. */
+  async start(id: string = Game.PLAYER.id): Promise<void> {
+    await this.tapNamed('MainMenuScene', `player:${id}`);
     await this.waitForScene('TownScene');
   }
 
@@ -283,10 +341,15 @@ export class Game {
   /** The live game state — the tank gauges move between saves. */
   async state(): Promise<any> {
     return this.page.evaluate(() => JSON.parse(JSON.stringify({
+      profileId: window.__state.profileId,
       stars: window.__state.stars,
+      earned: window.__state.earned,
+      owned: window.__state.owned,
+      livery: window.__state.livery,
       machines: window.__state.machines,
       project: window.__state.project,
       site: window.__state.site,
+      stage: window.__state.stage.id,
       town: window.__state.town,
       settings: window.__state.settings,
       next: window.__state.nextStep(),
@@ -298,12 +361,21 @@ export class Game {
     return expect.poll(async () => read(await this.state()), { timeout: 20_000, message });
   }
 
-  /** The persisted save, which is what survives closing the game. */
+  /** The active player's persisted save, which is what survives closing the game. */
   async save(): Promise<any> {
-    return this.page.evaluate((key) => {
-      const raw = window.localStorage.getItem(key);
+    return this.page.evaluate((prefix) => {
+      const id = window.__state.profileId;
+      const raw = id ? window.localStorage.getItem(`${prefix}:${id}`) : null;
       return raw ? JSON.parse(raw) : null;
-    }, SAVE_KEY);
+    }, LEGACY_SAVE_KEY);
+  }
+
+  /** Any key in localStorage, parsed. */
+  async storage(key: string): Promise<any> {
+    return this.page.evaluate((k) => {
+      const raw = window.localStorage.getItem(k);
+      return raw ? JSON.parse(raw) : null;
+    }, key);
   }
 
   /** Every Text string currently on screen in a scene, containers included. */
@@ -332,10 +404,8 @@ export class Game {
   }
 }
 
-/** Fixed click targets, in game coordinates. */
+/** Fixed click targets, in game coordinates, on the 880×550 stage the suite runs at. */
 export const AT = {
-  play: { x: 690, y: 300 },
-  grownUps: { x: 690, y: 382 },
   back: { x: 60, y: 40 },
   /** The signpost in the town that always points at the next job. */
   sign: { x: 432, y: 410 },

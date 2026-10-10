@@ -1,15 +1,24 @@
 /**
- * Logical game size.
+ * Logical game size — the smallest the stage gets.
  *
- * The canvas is scaled to FIT whatever it is given, so this is really a zoom control: a
- * smaller logical stage means every drawn shape and every label covers more of the screen.
- * Same stage as Sommer Hotellet, for the same reason — a five-year-old holds a phone at
- * arm's length.
+ * The canvas is scaled to fit the screen, so this is really a zoom control: a smaller
+ * logical stage means every drawn shape and every label covers more of the screen. Same
+ * stage as Sommer Hotellet, for the same reason — a five-year-old holds a phone at arm's
+ * length.
  *
- * The 1.6 aspect ratio is deliberate — changing it would letterbox instead of zoom.
+ * The stage then takes the screen's shape (helpers/Stage): wider than this on a phone,
+ * taller on a tablet, never smaller. Scenes lay out from `scale.width`/`scale.height`, never
+ * from these two numbers.
  */
 export const GAME_WIDTH = 880;
 export const GAME_HEIGHT = 550;
+
+/**
+ * How far the stage stretches before it letterboxes instead: about 2.4:1 at the wide end
+ * (wider than any phone held sideways, address bar and all) and 1.25:1 at the tall end.
+ */
+export const MAX_STAGE_WIDTH = 1320;
+export const MAX_STAGE_HEIGHT = 704;
 
 /**
  * Palette.
@@ -177,7 +186,8 @@ export const DEPTH = {
 
 /**
  * Builder ranks. A read-out of effort, not a gate — nothing to unlock, nothing to fail,
- * no way to go backwards.
+ * no way to go backwards. They count every star ever earned, so spending stars in the shop
+ * never takes a rank away.
  */
 export const RANKS = [
   { at: 0, name: 'Lærling' },
@@ -186,6 +196,8 @@ export const RANKS = [
   { at: 45, name: 'Formand' },
   { at: 70, name: 'Byggeleder' },
   { at: 100, name: 'Bygmester' },
+  { at: 160, name: 'Mesterbygger' },
+  { at: 240, name: 'Byens helt' },
 ];
 
 export interface RankInfo {
@@ -223,12 +235,35 @@ export function rankFor(stars: number): RankInfo {
 /** Shown in a big bouncy pop when something is finished. Rotated so it never nags. */
 export const PRAISE = ['Flot!', 'Sådan!', 'Godt gået!', 'Super!', 'Hurra!', 'Fint klaret!', 'Mega godt!'];
 
-/** House colours the child picks from when a building is finished. */
-export const PAINT = [
+export interface Paint {
+  name: string;
+  color: number;
+  /** Wall stripes, for the rainbow; drawn instead of the flat colour. */
+  stripes?: number[];
+  /** The star-shop item that unlocks it. The first six every child has. */
+  item?: string;
+  cost?: number;
+}
+
+/**
+ * House colours the child picks from when a building is finished.
+ *
+ * A house in the town stores its colour as an index into this list, so the order is part of
+ * the save format: append, never reorder.
+ */
+export const PAINT: Paint[] = [
   { name: 'Rød', color: 0xE0715A },
   { name: 'Gul', color: 0xF8CE55 },
   { name: 'Blå', color: 0x5B9BE0 },
   { name: 'Grøn', color: 0x74C255 },
   { name: 'Lilla', color: 0xAE87D6 },
   { name: 'Lyserød', color: 0xF593AC },
+  { name: 'Orange', color: 0xF5A249, item: 'maling-orange', cost: 6 },
+  { name: 'Turkis', color: 0x54C4B8, item: 'maling-turkis', cost: 6 },
+  { name: 'Hvid', color: 0xFDF7EA, item: 'maling-hvid', cost: 8 },
+  { name: 'Brun', color: 0xB07C4F, item: 'maling-brun', cost: 8 },
+  {
+    name: 'Regnbue', color: 0xF8CE55, item: 'maling-regnbue', cost: 20,
+    stripes: [0xE0715A, 0xF5A249, 0xF8CE55, 0x74C255, 0x5B9BE0, 0xAE87D6],
+  },
 ];

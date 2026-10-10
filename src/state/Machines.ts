@@ -1,13 +1,18 @@
 /**
- * The four machines, as data.
+ * The machines, as data.
  *
  * No Phaser here — the test harness imports this in Node. How each part is drawn lives in
  * objects/MachineArt.ts, keyed by the same ids.
+ *
+ * The first four build every house. The last three arrive with the bigger buildings: the
+ * road roller with the villa, the pile driver with the shop, and the tower crane with the
+ * high-rise, which is taller than the mobile crane can reach.
  */
 
-export type MachineId = 'gravko' | 'lastbil' | 'betonbil' | 'kran';
+export type MachineId = 'gravko' | 'lastbil' | 'betonbil' | 'kran' | 'vejtromle' | 'pael' | 'taarnkran';
 
-export const MACHINE_IDS: MachineId[] = ['gravko', 'lastbil', 'betonbil', 'kran'];
+/** Also the order of the workshop's bays, and part of the save format: append, never reorder. */
+export const MACHINE_IDS: MachineId[] = ['gravko', 'lastbil', 'betonbil', 'kran', 'vejtromle', 'pael', 'taarnkran'];
 
 /**
  * One part. Parts go on in any order — a five-year-old should not have to work out that
@@ -19,12 +24,14 @@ export interface PartDef {
   name: string;
 }
 
+export type ExtraKind = 'grease' | 'tyre' | 'mud' | 'bolt' | 'water' | 'lamp' | 'flag';
+
 /** The third preparation job — the one that is different for each machine. */
 export interface ExtraJob {
   /** Title on the job card. */
   title: string;
-  /** What the child taps: the art draws a nipple, a tyre, a mud spot or a bolt. */
-  kind: 'grease' | 'tyre' | 'mud' | 'bolt';
+  /** What the child taps: a grease nipple, a soft tyre, mud, a bolt, a dry spot, a lamp or a flag. */
+  kind: ExtraKind;
   /** What the done-caption says. */
   done: string;
 }
@@ -98,6 +105,50 @@ export const MACHINES: Record<MachineId, MachineDef> = {
       { id: 'krog', name: 'Krog' },
     ],
     extra: { title: 'Spænd boltene', kind: 'bolt', done: 'Spændt' },
+  },
+  vejtromle: {
+    id: 'vejtromle',
+    name: 'Vejtromlen',
+    short: 'Vejtromle',
+    job: 'triller gruset fast',
+    parts: [
+      { id: 'tromle', name: 'Tromle' },
+      { id: 'ramme', name: 'Ramme' },
+      { id: 'hjul', name: 'Baghjul' },
+      { id: 'motor', name: 'Motor' },
+      { id: 'hus', name: 'Førerhus' },
+    ],
+    extra: { title: 'Sprøjt vand på', kind: 'water', done: 'Våd' },
+  },
+  pael: {
+    id: 'pael',
+    name: 'Pælerammen',
+    short: 'Pæleramme',
+    job: 'banker pæle ned i jorden',
+    parts: [
+      { id: 'baelter', name: 'Bælter' },
+      { id: 'krop', name: 'Krop' },
+      { id: 'hus', name: 'Førerhus' },
+      { id: 'mast', name: 'Mast' },
+      { id: 'lod', name: 'Faldlod' },
+    ],
+    extra: { title: 'Tænd lygterne', kind: 'lamp', done: 'Tændt' },
+  },
+  taarnkran: {
+    id: 'taarnkran',
+    name: 'Tårnkranen',
+    short: 'Tårnkran',
+    job: 'løfter stålet helt op til toppen',
+    parts: [
+      { id: 'fod', name: 'Fundament' },
+      { id: 'taarn', name: 'Tårn' },
+      { id: 'top', name: 'Førerhus' },
+      { id: 'udligger', name: 'Udligger' },
+      { id: 'vaegt', name: 'Kontravægt' },
+      { id: 'krog', name: 'Krog' },
+    ],
+    // Flags on a crane are the Danish topping-out, the rejsegilde, in miniature.
+    extra: { title: 'Hejs flagene', kind: 'flag', done: 'Hejst' },
   },
 };
 

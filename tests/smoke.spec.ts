@@ -33,6 +33,17 @@ const SCREENS: [string, Record<string, unknown>, object?][] = [
   ['CraneScene', readySave({ stage: 3, placed: 1 })],
   ['CraneScene', readySave({ stage: 4, placed: 2 })],
   ['SettingsScene', {}],
+  ['ShopScene', { stars: 14, owned: ['bus', 'lak-blaa'], livery: 'lak-blaa' }],
+  ['ProfileScene', {}],
+  ['TownScene', readySave({ stage: 3 }, { project: 2, owned: ['lygter', 'flag', 'traer', 'bus', 'moelle', 'ballon', 'fyrvaerkeri', 'statue'] })],
+  ['GarageScene', readySave({ stage: 2 }, { project: 1, machines: {} })],
+  ['AssembleScene', readySave({ stage: 5 }, { project: 3, machines: {} }), { machine: 'taarnkran' }],
+  ['PrepScene', readySave({}, { livery: 'lak-guld', owned: ['lak-guld'] }), { machine: 'pael' }],
+  ['PileScene', readySave({ stage: 0, piles: [3, 1] }, { project: 2 })],
+  ['DigScene', readySave({ stage: 1, piles: [3, 3, 3] }, { project: 2 })],
+  ['RollScene', readySave({ stage: 2, gravel: 2, rolled: [1, 0.5] }, { project: 1 })],
+  ['CraneScene', readySave({ stage: 5, placed: 3 }, { project: 3 })],
+  ['CraneScene', readySave({ stage: 6, placed: 5 }, { project: 3 })],
 ];
 
 SCREENS.forEach(([scene, save, data], i) => {

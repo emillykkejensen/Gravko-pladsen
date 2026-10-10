@@ -43,32 +43,42 @@ export function exitApp(): void {
 
 /* ------------------------------------------------------------------- save file --- */
 
-const MIRROR_KEY = 'save';
+/**
+ * Where the one save was mirrored before there were player profiles.
+ *
+ * Only ever read now, by `restoreFromMirror` in state/Profiles, for a phone whose web storage
+ * was lost before it ever ran a build with profiles.
+ */
+export const LEGACY_MIRROR_KEY = 'save';
 
 /**
- * A second copy of the save in native storage.
+ * A second copy of what the game stores, in native storage.
  *
  * `localStorage` inside a WebView is not durable the way a file is — Android can clear web
  * storage to reclaim space, and some devices drop it when the app updates. Losing 40 stars
  * that took a week to earn is the kind of thing that ends a game's life in a household, so
- * every write is mirrored into SharedPreferences and read back if localStorage comes up
- * empty on a later launch.
+ * every write is mirrored into SharedPreferences, under the same key it has in
+ * localStorage, and read back if localStorage comes up empty on a later launch.
  */
-export function mirrorSave(json: string): void {
+export function mirror(key: string, value: string): void {
   if (!isNative()) return;
-  Preferences.set({ key: MIRROR_KEY, value: json }).catch(() => undefined);
+  Preferences.set({ key, value }).catch(() => undefined);
 }
 
-export async function restoreSaveIfEmpty(storageKey: string): Promise<boolean> {
-  if (!isNative()) return false;
+/** Drops the native copy too, so a deleted player cannot come back from the mirror. */
+export function unmirror(key: string): void {
+  if (!isNative()) return;
+  Preferences.remove({ key }).catch(() => undefined);
+}
+
+/** The native copy of one key. Always null in a browser, which has no second copy. */
+export async function readMirror(key: string): Promise<string | null> {
+  if (!isNative()) return null;
   try {
-    if (window.localStorage.getItem(storageKey)) return false;
-    const { value } = await Preferences.get({ key: MIRROR_KEY });
-    if (!value) return false;
-    window.localStorage.setItem(storageKey, value);
-    return true;
+    const { value } = await Preferences.get({ key });
+    return value ?? null;
   } catch {
-    return false;
+    return null;
   }
 }
 

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS, LINE, PAINT } from '../config';
+import { COLORS, GAME_HEIGHT, LINE, PAINT } from '../config';
 import { addBirds, drawCloud, drawSun, drawTree, gradientBand, shade } from '../helpers/Draw';
 import type { ProjectDef } from '../state/Projects';
 
@@ -12,8 +12,16 @@ import type { ProjectDef } from '../state/Projects';
  * concrete filling the formwork.
  */
 
-/** Ground level on every building-site screen. */
+/**
+ * Ground level on every building-site screen, on the 550-tall stage the scenes were drawn
+ * for. A taller stage (a tablet) puts the extra height into the sky, so the ground keeps its
+ * distance from the bottom edge: use `groundY(scene)`, not this.
+ */
 export const GROUND_Y = 400;
+
+export function groundY(scene: Phaser.Scene): number {
+  return GROUND_Y + scene.scale.height - GAME_HEIGHT;
+}
 
 /** Width of one section of foundation; the building is as wide as its foundation. */
 export const CELL_W = 40;
@@ -33,32 +41,34 @@ export const GRAVEL_DEPTH = 22;
 export const HOLE_DEPTH = GRAVEL_DEPTH + SLAB_H;
 
 /** The hole for the current building, centred on `cx`, sized to its foundation. */
-export function holeFor(pourCells: number, cx: number): { x: number; y: number; w: number; h: number } {
+export function holeFor(pourCells: number, cx: number, ground = GROUND_Y): HoleBox {
   const w = pourCells * CELL_W + 24;
-  return { x: cx - w / 2, y: GROUND_Y, w, h: HOLE_DEPTH };
+  return { x: cx - w / 2, y: ground, w, h: HOLE_DEPTH };
 }
 
-/** Sky, distant hills and a couple of trees. Background layer. */
+/** Sky, distant hills and a couple of trees, across the whole stage. Background layer. */
 export function siteSky(scene: Phaser.Scene, add: <T extends Phaser.GameObjects.GameObject>(o: T) => T): void {
   const { width } = scene.scale;
-  add(gradientBand(scene, 0, GROUND_Y, COLORS.skyLight, COLORS.sky));
+  const ground = groundY(scene);
+  add(gradientBand(scene, 0, ground, COLORS.skyLight, COLORS.sky));
 
   const hills = scene.add.graphics();
   hills.fillStyle(COLORS.grassLight, 0.7);
-  hills.fillEllipse(140, GROUND_Y + 10, 420, 150);
-  hills.fillEllipse(720, GROUND_Y + 14, 520, 170);
+  hills.fillEllipse(width * 0.16, ground + 10, width * 0.48, 150);
+  hills.fillEllipse(width * 0.82, ground + 14, width * 0.6, 170);
   hills.fillStyle(COLORS.grass, 0.55);
-  hills.fillEllipse(430, GROUND_Y + 20, 460, 120);
+  hills.fillEllipse(width * 0.49, ground + 20, width * 0.52, 120);
   add(hills);
 
-  add(drawTree(scene, 40, GROUND_Y - 4, 0.75));
-  add(drawTree(scene, width - 30, GROUND_Y - 2, 0.85));
+  add(drawTree(scene, 40, ground - 4, 0.75));
+  add(drawTree(scene, width - 30, ground - 2, 0.85));
 }
 
 /** Sun, clouds and birds. Ambient layer. */
 export function siteWeather(scene: Phaser.Scene, add: <T extends Phaser.GameObjects.GameObject>(o: T) => T): void {
-  add(drawSun(scene, 820, 92, 30));
-  const clouds = [drawCloud(scene, 180, 110, 0.9), drawCloud(scene, 560, 80, 0.7)];
+  const { width } = scene.scale;
+  add(drawSun(scene, width - 60, 92, 30));
+  const clouds = [drawCloud(scene, width * 0.2, 110, 0.9), drawCloud(scene, width * 0.64, 80, 0.7)];
   clouds.forEach((c, i) => {
     add(c);
     scene.tweens.add({
@@ -77,26 +87,57 @@ export function siteWeather(scene: Phaser.Scene, add: <T extends Phaser.GameObje
  * The ground in cross-section: a grass edge on top and layered earth below, with a few
  * stones so it reads as soil rather than a brown rectangle.
  */
-export function drawGround(g: Phaser.GameObjects.Graphics, width: number, height: number): void {
+export function drawGround(g: Phaser.GameObjects.Graphics, width: number, height: number, ground = GROUND_Y): void {
   g.fillStyle(COLORS.dirt);
-  g.fillRect(0, GROUND_Y, width, height - GROUND_Y);
+  g.fillRect(0, ground, width, height - ground);
   g.fillStyle(COLORS.dirtDeep, 0.35);
-  g.fillRect(0, GROUND_Y + 70, width, height - GROUND_Y - 70);
+  g.fillRect(0, ground + 70, width, height - ground - 70);
   g.fillStyle(COLORS.dirtLight, 0.6);
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < Math.round(width / 34); i++) {
     const x = (i * 97) % width;
-    const y = GROUND_Y + 30 + ((i * 53) % (height - GROUND_Y - 40));
+    const y = ground + 30 + ((i * 53) % (height - ground - 40));
     g.fillEllipse(x, y, 14 + (i % 3) * 6, 7 + (i % 2) * 3);
   }
   g.fillStyle(COLORS.grassDeep);
-  g.fillRect(0, GROUND_Y - 4, width, 14);
+  g.fillRect(0, ground - 4, width, 14);
   g.fillStyle(COLORS.grass);
-  g.fillRect(0, GROUND_Y - 6, width, 10);
+  g.fillRect(0, ground - 6, width, 10);
   g.lineStyle(LINE.base, COLORS.outline, 0.9);
-  g.lineBetween(0, GROUND_Y - 6, width, GROUND_Y - 6);
+  g.lineBetween(0, ground - 6, width, ground - 6);
 }
 
 export interface HoleBox { x: number; y: number; w: number; h: number }
+
+/** How far a pile reaches below the bottom of the hole. */
+export const PILE_BELOW = 84;
+export const PILE_W = 14;
+
+/** Where each pile goes, spread evenly under the foundation. */
+export function pileXs(hole: HoleBox, count: number): number[] {
+  const inner = hole.w - 40;
+  return Array.from({ length: count }, (_, i) => hole.x + 20 + ((i + 0.5) * inner) / count);
+}
+
+/**
+ * One concrete pile, its head at `top`. Drawn in the ground's cross-section, so the
+ * piles the pile driver banked in can still be seen under the hole on every later stage.
+ */
+export function drawPile(g: Phaser.GameObjects.Graphics, x: number, top: number, length: number): void {
+  g.fillStyle(COLORS.concrete);
+  g.fillRect(x - PILE_W / 2, top, PILE_W, length);
+  g.fillStyle(COLORS.white, 0.35);
+  g.fillRect(x - PILE_W / 2 + 2, top + 2, 3, length - 4);
+  g.fillStyle(COLORS.concreteDeep);
+  g.fillTriangle(x - PILE_W / 2, top + length, x + PILE_W / 2, top + length, x, top + length + 10);
+  g.lineStyle(LINE.thin, COLORS.outline, 0.9);
+  g.strokeRect(x - PILE_W / 2, top, PILE_W, length);
+  g.strokeTriangle(x - PILE_W / 2, top + length, x + PILE_W / 2, top + length, x, top + length + 10);
+}
+
+/** The piles under a hole that has been dug, if the building has any. */
+export function drawPilesUnder(g: Phaser.GameObjects.Graphics, hole: HoleBox, count: number): void {
+  for (const x of pileXs(hole, count)) drawPile(g, x, hole.y + hole.h, PILE_BELOW - 10);
+}
 
 /** An empty hole: darker earth walls and floor, with the grass edge cut back. */
 export function drawHole(g: Phaser.GameObjects.Graphics, hole: HoleBox): void {
@@ -263,6 +304,13 @@ export function drawBuilding(g: Phaser.GameObjects.Graphics, p: ProjectDef, pain
   g.fillRect(x + 3, -wallH + 3, w, wallH);
   g.fillStyle(color);
   g.fillRect(x, -wallH, w, wallH);
+  const stripes = PAINT[paint]?.stripes;
+  if (stripes) {
+    stripes.forEach((c, i) => {
+      g.fillStyle(c);
+      g.fillRect(x + (i * w) / stripes.length, -wallH, w / stripes.length + 0.5, wallH);
+    });
+  }
   g.fillStyle(COLORS.white, 0.18);
   g.fillRect(x, -wallH, w * 0.18, wallH);
   g.lineStyle(LINE.base, COLORS.outline, 1);
@@ -347,8 +395,12 @@ export function drawBuildingFrame(g: Phaser.GameObjects.Graphics, p: ProjectDef,
 
 /* ------------------------------------------------------------------ workshop --- */
 
-/** Floor level inside the workshop. */
+/** Floor level inside the workshop, on the 550 stage; `floorY(scene)` on any other. */
 export const FLOOR_Y = 440;
+
+export function floorY(scene: Phaser.Scene): number {
+  return FLOOR_Y + scene.scale.height - GAME_HEIGHT;
+}
 
 /**
  * The inside of the workshop: panelled wall, a tool board, a concrete floor with a hazard
@@ -356,49 +408,52 @@ export const FLOOR_Y = 440;
  */
 export function workshopBackdrop(scene: Phaser.Scene, add: <T extends Phaser.GameObjects.GameObject>(o: T) => T): void {
   const { width, height } = scene.scale;
-  add(gradientBand(scene, 0, FLOOR_Y, 0xE7EEF2, 0xCBD8E0));
+  const floor = floorY(scene);
+  // the tool board and the window hang at the same height above the floor on any stage
+  const top = floor - 290;
+  add(gradientBand(scene, 0, floor, 0xE7EEF2, 0xCBD8E0));
 
   const g = scene.add.graphics();
   // wall panels
   g.lineStyle(2, 0xB3C2CC, 0.9);
-  for (let x = 0; x < width; x += 110) g.lineBetween(x, 0, x, FLOOR_Y);
-  g.lineBetween(0, 120, width, 120);
+  for (let x = 0; x < width; x += 110) g.lineBetween(x, 0, x, floor);
+  g.lineBetween(0, top - 30, width, top - 30);
 
   // tool board with silhouettes of spanners and hammers
   g.fillStyle(COLORS.woodLight);
-  g.fillRoundedRect(40, 150, 170, 110, 8);
+  g.fillRoundedRect(40, top, 170, 110, 8);
   g.lineStyle(LINE.base, COLORS.outline, 0.9);
-  g.strokeRoundedRect(40, 150, 170, 110, 8);
+  g.strokeRoundedRect(40, top, 170, 110, 8);
   g.fillStyle(COLORS.woodDeep, 0.5);
   for (let i = 0; i < 4; i++) {
     const tx = 64 + i * 40;
-    g.fillRect(tx - 3, 168, 6, 60);
-    g.fillCircle(tx, 168, 9);
+    g.fillRect(tx - 3, top + 18, 6, 60);
+    g.fillCircle(tx, top + 18, 9);
   }
 
   // a window with the sky in it
   g.fillStyle(COLORS.sky);
-  g.fillRoundedRect(width - 210, 150, 150, 90, 8);
+  g.fillRoundedRect(width - 210, top, 150, 90, 8);
   g.fillStyle(COLORS.white, 0.6);
-  g.fillEllipse(width - 160, 180, 50, 18);
+  g.fillEllipse(width - 160, top + 30, 50, 18);
   g.lineStyle(LINE.thick, COLORS.outline, 0.9);
-  g.strokeRoundedRect(width - 210, 150, 150, 90, 8);
-  g.lineBetween(width - 135, 150, width - 135, 240);
+  g.strokeRoundedRect(width - 210, top, 150, 90, 8);
+  g.lineBetween(width - 135, top, width - 135, top + 90);
 
   // floor
   g.fillStyle(COLORS.concrete);
-  g.fillRect(0, FLOOR_Y, width, height - FLOOR_Y);
+  g.fillRect(0, floor, width, height - floor);
   g.fillStyle(COLORS.concreteDeep, 0.25);
-  for (let i = 0; i < 18; i++) g.fillEllipse((i * 131) % width, FLOOR_Y + 30 + ((i * 47) % 80), 40, 6);
+  for (let i = 0; i < Math.round(width / 49); i++) g.fillEllipse((i * 131) % width, floor + 30 + ((i * 47) % 80), 40, 6);
   // hazard stripe along the wall
   for (let x = 0; x < width; x += 28) {
     g.fillStyle(COLORS.machine);
-    g.fillRect(x, FLOOR_Y - 12, 14, 12);
+    g.fillRect(x, floor - 12, 14, 12);
     g.fillStyle(COLORS.rubber);
-    g.fillRect(x + 14, FLOOR_Y - 12, 14, 12);
+    g.fillRect(x + 14, floor - 12, 14, 12);
   }
   g.lineStyle(LINE.base, COLORS.outline, 0.9);
-  g.lineBetween(0, FLOOR_Y - 12, width, FLOOR_Y - 12);
-  g.lineBetween(0, FLOOR_Y, width, FLOOR_Y);
+  g.lineBetween(0, floor - 12, width, floor - 12);
+  g.lineBetween(0, floor, width, floor);
   add(g);
 }

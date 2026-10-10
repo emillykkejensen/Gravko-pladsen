@@ -61,8 +61,9 @@ const head = `<title>Gravko-pladsen</title>
   #game-container canvas { display: block; touch-action: none; }
 
   /*
-    The game is 960x600. Held upright, a phone letterboxes that into a strip barely tall
-    enough to read, so portrait gets a card instead of a bad game.
+    The game is drawn landscape: it fills any screen wider than it is tall, but held
+    upright a phone letterboxes it into a strip barely tall enough to read, so portrait
+    gets a card instead of a bad game.
   */
   #rotate {
     position: fixed;
