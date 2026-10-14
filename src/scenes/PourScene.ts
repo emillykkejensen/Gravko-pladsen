@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config';
 import { gameState } from '../state/GameState';
-import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
+import { addBackButton, addSceneTitle, addStarCounter } from '../ui/Chrome';
 import { caption, progressBar } from '../helpers/Draw';
 import { dur } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
@@ -231,7 +231,6 @@ export class PourScene extends BaseScene {
     audio.horn();
     showConfetti(this, cx, 260, 36);
     showPraise(this, cx, 220, 'Fundamentet er støbt!');
-    award(this, 3, cx, this.slabTop);
     this.refresh();
   }
 }

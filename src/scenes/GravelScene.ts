@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS, SIZE } from '../config';
 import { gameState } from '../state/GameState';
-import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
+import { addBackButton, addSceneTitle, addStarCounter } from '../ui/Chrome';
 import { button, caption } from '../helpers/Draw';
 import { dur, popIn, reduceMotion } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
@@ -22,7 +22,8 @@ type Phase = 'reverse' | 'parked' | 'tipping' | 'leaving' | 'done';
 
 /** How close to the stop sign counts as there: the truck rolls the last bit itself. */
 const PARK_SLACK = 60;
-const TIP_Y = 490;
+/** The tip button: BUTTON_FLOOR above the 550 stage's bottom. */
+const TIP_Y = 454;
 
 /**
  * Laying gravel in the bottom of the hole.
@@ -127,7 +128,7 @@ export class GravelScene extends BaseScene {
     sign.fillRect(-8, -74, 16, 4);
 
     this.dyn(caption(this, this.scale.width - 120, 96,
-      `Læs ${Math.min(gameState.site.gravel + 1, p.gravelLoads)} af ${p.gravelLoads}`));
+      `Grus: ${gameState.site.gravel} af ${p.gravelLoads} læs`, gameState.gravelDone ? 'done' : 'idle'));
 
     const hint = this.phase === 'reverse' ? 'Træk lastbilen hen til hullet'
       : this.phase === 'parked' ? 'Tryk på Tip!' : '';
@@ -139,7 +140,9 @@ export class GravelScene extends BaseScene {
     this.everyFrame(dt => {
       truck.setPosition(this.x, this.gy).setScale(-S, S);
       truck.clear();
-      drawMachine(truck, 'lastbil', undefined, { bedAngle: this.bed, bedLoad: this.carried });
+      // a bigger bed brings more than one load, heaped up higher
+      const heaped = this.carried * (1 + (gameState.gravelPerTrip - 1) * 0.35);
+      drawMachine(truck, 'lastbil', undefined, { bedAngle: this.bed, bedLoad: heaped });
 
       stream.clear();
       if (this.phase === 'tipping' && this.bed > 0.45 && this.carried > 0) {
@@ -283,7 +286,6 @@ export class GravelScene extends BaseScene {
     audio.horn();
     showConfetti(this, hole.x + hole.w / 2, 260, 36);
     showPraise(this, hole.x + hole.w / 2, 220, 'Gruset er lagt!');
-    award(this, 3, hole.x + hole.w / 2, this.gy);
     this.refresh();
   }
 }

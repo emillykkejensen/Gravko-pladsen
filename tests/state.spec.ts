@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { Game, readySave, readyMachine, saveKeyFor } from './game';
+import { Game, readySave, readyMachine, saveKeyFor, townOf } from './game';
 
 /**
  * The save file: what survives a reload, and what a damaged save turns into.
@@ -24,8 +24,9 @@ test('a damaged save is cleaned up rather than trusted', async ({ page }) => {
       // a part that no longer exists, and tanks fuller than full
       gravko: { parts: ['baelter', 'raketmotor'], diesel: 7, oil: -2, extra: [true] },
     },
-    site: { stage: 99, dug: ['x', 3], gravel: 1, poured: [2, 'y'], placed: 0 },
-    town: [{ project: 0, color: 1 }, { nonsense: true }],
+    project: 1,
+    site: { stage: 99, dug: ['x', 3], gravel: 1, poured: [2, 'y'], placed: 0, rocks: [1, 1, 'z'], wrecked: -4 },
+    town: [{ project: 0, color: 1 }, { nonsense: true }, { project: 0, color: 3 }],
   });
   const s = await game.state();
   expect(s.stars).toBe(0);
@@ -33,10 +34,12 @@ test('a damaged save is cleaned up rather than trusted', async ({ page }) => {
   expect(s.machines.gravko.diesel).toBe(1);
   expect(s.machines.gravko.oil).toBe(0);
   expect(s.machines.gravko.extra).toEqual([true, false, false]);
-  expect(s.site.stage).toBe(4);
+  expect(s.site.stage, 'the villa\'s last stage').toBe(5);
   expect(s.site.dug).toEqual([3]);
   expect(s.site.poured).toEqual([1, 0]);
-  expect(s.town).toEqual([{ project: 0, color: 1 }]);
+  expect(s.site.rocks).toEqual([1]);
+  expect(s.site.wrecked).toBe(0);
+  expect(s.town, 'one building to a plot').toEqual([{ project: 0, color: 3 }]);
   // and every screen still opens on it
   for (const scene of ['TownScene', 'GarageScene', 'CraneScene']) await game.goTo(scene);
   game.expectNoErrors();
@@ -102,14 +105,44 @@ test('a save from before the bigger buildings finds its place in the new stages'
   game.expectNoErrors();
 });
 
-test('a full town starts a new one with the next house', async ({ page }) => {
-  const town = Array.from({ length: 8 }, (_, i) => ({ project: i, color: i % 6 }));
-  const game = await Game.openWithSave(page, readySave({ stage: 4, placed: 2 }, { project: 8, town }));
+test('the town never fills up: after the hospital the road goes on with houses', async ({ page }) => {
+  const town = townOf(8);
+  const game = await Game.openWithSave(page, readySave({ stage: 11, placed: 5 }, { project: 8, town }));
+  expect((await game.state()).stage).toBe('mal');
   await game.goTo('CraneScene');
   await game.tapNamed('CraneScene', 'paint:1');
   await game.tapNamed('CraneScene', 'go');
   await game.waitForScene('TownScene');
   const s = await game.state();
-  expect(s.town).toEqual([{ project: 8, color: 1 }]);
+  expect(s.town, 'nothing is swept away').toEqual([...town, { project: 8, color: 1 }]);
+  expect(s.project, 'the next plot along').toBe(9);
+  expect(s.stars, 'the hospital is worth fifteen').toBe(15);
+  // a house again, borrowing one of the big buildings' jobs
+  const stages: string[] = await page.evaluate(() => window.__state.stages.map((st: { id: string }) => st.id));
+  expect(stages).toEqual(['planer', 'grav', 'grus', 'stoeb', 'rejs', 'mal']);
+  await game.expectScreenText('TownScene', 'everything the town waited for is there').toContain('Byen er færdig!');
+  game.expectNoErrors();
+});
+
+test('a save from before the long road keeps its houses, on plots of their own', async ({ page }) => {
+  // Version 2: the four buildings came round again, and a full town of eight started over.
+  // This one has built ten: the first eight were swept away, two stand in the new town,
+  // and the shop of the third round is half dug.
+  const game = await Game.openWithSave(page, {
+    version: 2,
+    stars: 40,
+    project: 10,
+    town: [{ project: 8, color: 2 }, { project: 9, color: 5 }],
+    site: { stage: 2, dug: [0, 1], gravel: 0, poured: [], placed: 0, piles: [3, 3, 3] },
+  });
+  const s = await game.state();
+  expect(s.town.map((b: { project: number }) => b.project), 'the first four, then the houses after the hospital')
+    .toEqual([0, 1, 2, 3, 13, 14]);
+  expect(s.town[0].color, 'the little house in the colour its twin was painted').toBe(2);
+  expect(s.project, 'and the bus station is next').toBe(4);
+  expect(s.site.stage).toBe(0);
+  expect(s.site.dug).toEqual([]);
+  expect(s.stars).toBe(40);
+  await game.goTo('TownScene');
   game.expectNoErrors();
 });

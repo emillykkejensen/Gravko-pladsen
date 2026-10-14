@@ -217,6 +217,28 @@ export function drawFoundation(
   g.lineBetween(x, top + SLAB_H, x + w, top + SLAB_H);
 }
 
+/**
+ * The hole once the foundation has set: the gravel bed, the slab flush with the ground and
+ * earth backfilled against its ends. Where every stage after the foundation stands.
+ */
+export function drawFinishedSlab(g: Phaser.GameObjects.Graphics, hole: HoleBox, p: ProjectDef): void {
+  drawHole(g, hole);
+  drawPilesUnder(g, hole, p.piles);
+  drawGravelLayer(g, hole, GRAVEL_DEPTH);
+  drawFoundation(g, hole.x + 12, slabTop(hole), Array(p.pourCells).fill(1), 1, false);
+  g.fillStyle(COLORS.dirt);
+  g.fillRect(hole.x, hole.y - 6, 12, SLAB_H + 6);
+  g.fillRect(hole.x + hole.w - 12, hole.y - 6, 12, SLAB_H + 6);
+  g.fillStyle(COLORS.grass);
+  g.fillRect(hole.x, hole.y - 6, 12, 6);
+  g.fillRect(hole.x + hole.w - 12, hole.y - 6, 12, 6);
+}
+
+/** The top of the finished slab: where the building stands. */
+export function slabTop(hole: HoleBox): number {
+  return hole.y + hole.h - GRAVEL_DEPTH - SLAB_H;
+}
+
 /* ----------------------------------------------------------------- buildings --- */
 
 /** Steel I-beam between two points. */
@@ -291,13 +313,33 @@ export function buildingHeight(p: ProjectDef): number {
  *
  * Every storey gets windows; the ground floor gets a door; a shop gets an awning. The
  * colour is the child's own choice, and the roof stays the same for every house so the
- * town reads as one place.
+ * town reads as one place. The town's big buildings each get what makes them that building
+ * at a glance: the bus station's canopy and stop sign, the fire station's red doors and hose
+ * tower, the police station's blue light, the railway station's clock and the hospital's red
+ * cross and helipad.
  */
 export function drawBuilding(g: Phaser.GameObjects.Graphics, p: ProjectDef, paint: number): void {
   const w = p.pourCells * CELL_W;
   const x = -w / 2;
   const color = PAINT[paint]?.color ?? COLORS.wall;
   const wallH = p.floors * FLOOR_H;
+  const kind = p.kind;
+
+  // the fire station's hose tower stands behind the building's right end
+  if (kind === 'brandstation') {
+    const tx = x + w - 34;
+    const th = wallH + 44;
+    g.fillStyle(shade(color, -0.12));
+    g.fillRect(tx, -th, 30, th);
+    g.lineStyle(LINE.base, COLORS.outline, 1);
+    g.strokeRect(tx, -th, 30, th);
+    g.fillStyle(COLORS.roofDeep);
+    g.fillTriangle(tx - 4, -th, tx + 15, -th - 18, tx + 34, -th);
+    g.strokeTriangle(tx - 4, -th, tx + 15, -th - 18, tx + 34, -th);
+    g.fillStyle(COLORS.window);
+    g.fillRect(tx + 9, -th + 10, 12, 14);
+    g.strokeRect(tx + 9, -th + 10, 12, 14);
+  }
 
   // walls
   g.fillStyle(shade(color, -0.25));
@@ -320,29 +362,53 @@ export function drawBuilding(g: Phaser.GameObjects.Graphics, p: ProjectDef, pain
   const perFloor = Math.max(2, Math.round(w / 50));
   for (let f = 0; f < p.floors; f++) {
     const fy = -(f + 1) * FLOOR_H;
+    // the fire station's ground floor is its engine doors, the bus station's is glass
+    if (f === 0 && (kind === 'brandstation' || kind === 'busstation')) continue;
     for (let i = 0; i < perFloor; i++) {
       const wx = x + ((i + 0.5) * w) / perFloor - 10;
       if (f === 0 && Math.abs(wx + 10) < 18) continue;
-      g.fillStyle(COLORS.window);
-      g.fillRoundedRect(wx, fy + 12, 20, 20, 3);
-      g.fillStyle(COLORS.white, 0.6);
-      g.fillTriangle(wx + 2, fy + 14, wx + 11, fy + 14, wx + 2, fy + 23);
-      g.lineStyle(LINE.thin, COLORS.outline, 1);
-      g.strokeRoundedRect(wx, fy + 12, 20, 20, 3);
-      g.lineBetween(wx + 10, fy + 12, wx + 10, fy + 32);
+      drawWindow(g, wx, fy + 12, kind === 'togstation' && f === 0);
     }
   }
 
+  if (kind === 'brandstation') {
+    // two tall red engine doors, with a door for people between them
+    for (const dx of [x + 8, x + w - 62]) {
+      g.fillStyle(COLORS.red);
+      g.fillRoundedRect(dx, -40, 54, 40, { tl: 8, tr: 8, bl: 0, br: 0 });
+      g.lineStyle(LINE.thin, COLORS.outline, 1);
+      g.strokeRoundedRect(dx, -40, 54, 40, { tl: 8, tr: 8, bl: 0, br: 0 });
+      g.lineStyle(1.5, shade(COLORS.red, -0.3), 1);
+      for (let ly = -32; ly < 0; ly += 7) g.lineBetween(dx + 3, ly, dx + 51, ly);
+    }
+  } else if (kind === 'busstation') {
+    // a glass front, all the way along the ground floor
+    g.fillStyle(COLORS.window);
+    g.fillRect(x + 6, -40, w - 12, 36);
+    g.lineStyle(LINE.thin, COLORS.outline, 1);
+    g.strokeRect(x + 6, -40, w - 12, 36);
+    for (let gx = x + 6 + (w - 12) / 5; gx < x + w - 8; gx += (w - 12) / 5) g.lineBetween(gx, -40, gx, -4);
+    g.fillStyle(COLORS.white, 0.5);
+    g.fillTriangle(x + 10, -36, x + 40, -36, x + 10, -14);
+  }
+
   // door
-  g.fillStyle(COLORS.woodDeep);
-  g.fillRoundedRect(-11, -34, 22, 34, { tl: 8, tr: 8, bl: 0, br: 0 });
-  g.lineStyle(LINE.thin, COLORS.outline, 1);
-  g.strokeRoundedRect(-11, -34, 22, 34, { tl: 8, tr: 8, bl: 0, br: 0 });
-  g.fillStyle(COLORS.sun);
-  g.fillCircle(6, -16, 2.2);
+  if (kind !== 'brandstation') {
+    g.fillStyle(kind === 'busstation' ? COLORS.glassLight : COLORS.woodDeep);
+    g.fillRoundedRect(-11, -34, 22, 34, { tl: 8, tr: 8, bl: 0, br: 0 });
+    g.lineStyle(LINE.thin, COLORS.outline, 1);
+    g.strokeRoundedRect(-11, -34, 22, 34, { tl: 8, tr: 8, bl: 0, br: 0 });
+    g.fillStyle(COLORS.sun);
+    g.fillCircle(6, -16, 2.2);
+  } else {
+    g.fillStyle(COLORS.woodDeep);
+    g.fillRect(-9, -30, 18, 30);
+    g.lineStyle(LINE.thin, COLORS.outline, 1);
+    g.strokeRect(-9, -30, 18, 30);
+  }
 
   // a shop: wide and single-storey, so it gets a striped awning over the windows
-  if (p.floors === 1 && p.roof === 'flad') {
+  if (kind === 'butik') {
     const aw = w - 10;
     for (let i = 0; i < 8; i++) {
       g.fillStyle(i % 2 ? COLORS.white : COLORS.red);
@@ -350,6 +416,23 @@ export function drawBuilding(g: Phaser.GameObjects.Graphics, p: ProjectDef, pain
     }
     g.lineStyle(LINE.thin, COLORS.outline, 1);
     g.strokeRect(x + 5, -FLOOR_H + 2, aw, 10);
+  }
+
+  // the police station's blue band and sign, the hospital's red cross
+  if (kind === 'politi') {
+    g.fillStyle(COLORS.blue);
+    g.fillRect(x, -FLOOR_H - 2, w, 9);
+    g.lineStyle(LINE.thin, COLORS.outline, 1);
+    g.strokeRect(x, -FLOOR_H - 2, w, 9);
+    plateFlat(g, -24, -wallH + 6, 48, 14, COLORS.blue);
+    g.fillStyle(COLORS.white);
+    for (let i = 0; i < 6; i++) g.fillRect(-18 + i * 6.5, -wallH + 10, 4, 6);
+  }
+  if (kind === 'hospital') {
+    plateFlat(g, -17, -wallH + 6, 34, 34, COLORS.white);
+    g.fillStyle(COLORS.red);
+    g.fillRect(-5, -wallH + 10, 10, 26);
+    g.fillRect(-13, -wallH + 18, 26, 10);
   }
 
   // roof
@@ -361,23 +444,98 @@ export function drawBuilding(g: Phaser.GameObjects.Graphics, p: ProjectDef, pain
     g.fillTriangle(x - 12, -wallH, 0, -wallH - rh, x + w + 12, -wallH);
     g.lineStyle(LINE.base, COLORS.outline, 1);
     g.strokeTriangle(x - 12, -wallH, 0, -wallH - rh, x + w + 12, -wallH);
-    // chimney
-    g.fillStyle(COLORS.roofDeep);
-    g.fillRect(x + w * 0.68, -wallH - rh * 0.75, 12, rh * 0.4);
-    g.strokeRect(x + w * 0.68, -wallH - rh * 0.75, 12, rh * 0.4);
+    if (kind === 'togstation') {
+      // the station clock in the gable
+      const cy = -wallH - rh * 0.42;
+      g.fillStyle(COLORS.white);
+      g.fillCircle(0, cy, 13);
+      g.lineStyle(LINE.thin, COLORS.outline, 1);
+      g.strokeCircle(0, cy, 13);
+      g.lineStyle(2.5, COLORS.outline, 1);
+      g.lineBetween(0, cy, 0, cy - 9);
+      g.lineBetween(0, cy, 6, cy + 2);
+    } else {
+      // chimney
+      g.fillStyle(COLORS.roofDeep);
+      g.fillRect(x + w * 0.68, -wallH - rh * 0.75, 12, rh * 0.4);
+      g.strokeRect(x + w * 0.68, -wallH - rh * 0.75, 12, rh * 0.4);
+    }
   } else {
+    const over = kind === 'busstation' ? 34 : 6;
     g.fillStyle(COLORS.stoneDeep);
-    g.fillRect(x - 6, -wallH - rh, w + 12, rh);
+    g.fillRect(x - 6, -wallH - rh, w + 6 + over, rh);
     g.lineStyle(LINE.base, COLORS.outline, 1);
-    g.strokeRect(x - 6, -wallH - rh, w + 12, rh);
-    if (p.floors > 2) {
+    g.strokeRect(x - 6, -wallH - rh, w + 6 + over, rh);
+    if (kind === 'hoejhus') {
       // a high-rise gets an antenna with a light on it
       g.lineStyle(3, COLORS.outline, 1);
       g.lineBetween(w * 0.25, -wallH - rh, w * 0.25, -wallH - rh - 26);
       g.fillStyle(COLORS.red);
       g.fillCircle(w * 0.25, -wallH - rh - 28, 4);
     }
+    if (kind === 'politi') {
+      plateFlat(g, -8, -wallH - rh - 12, 16, 12, COLORS.blue);
+      g.fillStyle(COLORS.white, 0.6);
+      g.fillRect(-4, -wallH - rh - 9, 3, 6);
+    }
+    if (kind === 'hospital') {
+      // the helipad: a white H in a circle on the roof's edge
+      g.fillStyle(COLORS.stone);
+      g.fillEllipse(w * 0.22, -wallH - rh, 64, 14);
+      g.lineStyle(LINE.thin, COLORS.outline, 1);
+      g.strokeEllipse(w * 0.22, -wallH - rh, 64, 14);
+      g.lineStyle(2, COLORS.white, 1);
+      g.lineBetween(w * 0.22 - 7, -wallH - rh - 4, w * 0.22 - 7, -wallH - rh + 4);
+      g.lineBetween(w * 0.22 + 7, -wallH - rh - 4, w * 0.22 + 7, -wallH - rh + 4);
+      g.lineBetween(w * 0.22 - 7, -wallH - rh, w * 0.22 + 7, -wallH - rh);
+    }
+    if (kind === 'busstation') {
+      // the canopy's post, and the bus stop sign on its pole
+      g.fillStyle(COLORS.outline);
+      g.fillRect(x + w + 22, -wallH, 5, wallH);
+      g.fillRect(x + w + 46, -64, 4, 64);
+      g.fillStyle(COLORS.sun);
+      g.fillCircle(x + w + 48, -70, 12);
+      g.lineStyle(LINE.thin, COLORS.outline, 1);
+      g.strokeCircle(x + w + 48, -70, 12);
+      g.fillStyle(COLORS.red);
+      g.fillRect(x + w + 42, -73, 12, 6);
+    }
   }
+}
+
+/** A flat outlined plate — signs on the buildings. */
+function plateFlat(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, color: number): void {
+  g.fillStyle(color);
+  g.fillRoundedRect(x, y, w, h, 3);
+  g.lineStyle(LINE.thin, COLORS.outline, 1);
+  g.strokeRoundedRect(x, y, w, h, 3);
+}
+
+/** One window, top-left at (wx, wy), 20 square — arched for the railway station. */
+export function drawWindow(g: Phaser.GameObjects.Graphics, wx: number, wy: number, arched = false): void {
+  const r = arched ? { tl: 10, tr: 10, bl: 2, br: 2 } : 3;
+  g.fillStyle(COLORS.window);
+  g.fillRoundedRect(wx, wy, 20, 20, r);
+  g.fillStyle(COLORS.white, 0.6);
+  g.fillTriangle(wx + 2, wy + 2, wx + 11, wy + 2, wx + 2, wy + 11);
+  g.lineStyle(LINE.thin, COLORS.outline, 1);
+  g.strokeRoundedRect(wx, wy, 20, 20, r);
+  g.lineBetween(wx + 10, wy, wx + 10, wy + 20);
+}
+
+/** Where a window spot's top-left corner is, relative to the building's bottom middle. */
+export function windowAt(p: ProjectDef, floor: number, slot: number): { x: number; y: number } {
+  const w = p.pourCells * CELL_W;
+  const per = Math.max(2, Math.round(w / 50));
+  return { x: -w / 2 + ((slot + 0.5) * w) / per - 10, y: -(floor + 1) * FLOOR_H + 12 };
+}
+
+/** Total height of a finished building above its base, with what sticks up — for the town. */
+export function buildingTop(p: ProjectDef): number {
+  const extra = p.kind === 'brandstation' ? 62 - roofHeight(p.roof, p.pourCells * CELL_W)
+    : p.kind === 'hoejhus' ? 30 : p.kind === 'politi' ? 12 : 0;
+  return buildingHeight(p) + Math.max(0, extra);
 }
 
 /** A building under construction: as many frames as have been lifted. Origin bottom-middle. */

@@ -32,3 +32,29 @@ export function flatten(
 
   return rt;
 }
+
+/** Widest a single baked texture gets; wider strips are baked in pieces. */
+const CHUNK = 2048;
+
+/**
+ * Bakes static drawing that lies in world coordinates across a stretch wider than the
+ * screen — the town's road, which the child slides along — in pieces no wider than a
+ * texture can safely be. The pieces are added to `add` in place, so they scroll with the
+ * camera like the drawing they replace.
+ */
+export function flattenWide(
+  scene: Phaser.Scene,
+  container: Phaser.GameObjects.Container,
+  width: number,
+  depth: number,
+  add: (rt: Phaser.GameObjects.RenderTexture) => void
+): void {
+  const height = scene.scale.height;
+  for (let x = 0; x < width; x += CHUNK) {
+    const w = Math.min(CHUNK, width - x);
+    const rt = scene.add.renderTexture(x, 0, w, height).setOrigin(0, 0).setDepth(depth);
+    rt.draw(container, -x, 0);
+    add(rt);
+  }
+  container.destroy(true);
+}

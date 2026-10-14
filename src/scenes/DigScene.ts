@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config';
 import { gameState } from '../state/GameState';
-import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
+import { addBackButton, addSceneTitle, addStarCounter } from '../ui/Chrome';
 import { caption } from '../helpers/Draw';
 import { dur } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
@@ -164,26 +164,39 @@ export class DigScene extends BaseScene {
     };
     drawEarth();
 
-    // the heap grows with every bucket tipped on it
+    // The heap grows with every bucket tipped on it. It sits on the grass, a mound and not a
+    // ball half sunk into the ground: a dome whose flat bottom is the top of the grass.
     const heap = this.dyn(this.add.graphics());
     const drawHeap = () => {
-      const n = gameState.site.dug.length - (this.carried > 0 ? 1 : 0);
+      const n = gameState.site.dug.length - this.carried;
       heap.clear();
       if (n <= 0) return;
       const total = p.holeCols * p.holeRows;
       const h = 14 + (n / total) * 70;
       const w = 70 + (n / total) * 90;
+      const base = this.gy - 6;
+      const dome = (cx: number, halfW: number, height: number) => {
+        const pts: { x: number; y: number }[] = [];
+        for (let i = 0; i <= 24; i++) {
+          const a = (i / 24) * Math.PI;
+          // a little flatter on top than a half-ellipse, the way loose earth settles
+          const lift = Math.pow(Math.sin(a), 0.8);
+          pts.push({ x: cx - Math.cos(a) * halfW, y: base - lift * height });
+        }
+        return pts;
+      };
       heap.fillStyle(COLORS.dirtDeep);
-      heap.fillEllipse(this.heapX, this.gy, w + 8, h * 2 + 8);
+      heap.fillPoints(dome(this.heapX, w / 2 + 4, h + 4), true);
       heap.fillStyle(COLORS.dirt);
-      heap.fillEllipse(this.heapX - 4, this.gy - 3, w, h * 2);
+      heap.fillPoints(dome(this.heapX - 4, w / 2 - 2, h - 2), true);
       heap.fillStyle(COLORS.dirtLight);
-      heap.fillEllipse(this.heapX - 14, this.gy - h * 0.7, w * 0.3, h * 0.4);
+      heap.fillEllipse(this.heapX - 14, base - h * 0.7, w * 0.3, h * 0.25);
+      for (let i = 0; i < 5; i++) {
+        heap.fillStyle(COLORS.dirtDeep, 0.6);
+        heap.fillCircle(this.heapX - w * 0.3 + i * w * 0.15, base - h * (0.2 + (i % 3) * 0.15), 3);
+      }
       heap.lineStyle(2.5, COLORS.outline, 0.9);
-      heap.strokeEllipse(this.heapX, this.gy, w + 8, h * 2 + 8);
-      // ground hides the bottom half of the ellipse
-      heap.fillStyle(COLORS.grass);
-      heap.fillRect(this.heapX - w, this.gy - 2, w * 2, 8);
+      heap.strokePoints(dome(this.heapX, w / 2 + 4, h + 4), false);
     };
     drawHeap();
 
@@ -249,8 +262,10 @@ export class DigScene extends BaseScene {
       const tip = this.tipOnScreen(pose);
       if (this.carried === 0) {
         const chunk = this.chunkAt(tip);
-        if (chunk >= 0 && gameState.dig(chunk)) {
-          this.carried = 1;
+        const got = chunk >= 0 ? gameState.scoop(chunk) : [];
+        if (got.length) {
+          // a bigger bucket takes more than one chunk at a time
+          this.carried = got.length;
           audio.scoop();
           this.crumbs(tip.x, tip.y, COLORS.dirt);
           drawEarth();
@@ -305,7 +320,9 @@ export class DigScene extends BaseScene {
     const e1 = { x: r.x + Math.cos(a - b) * L1, y: r.y + Math.sin(a - b) * L1 };
     const e2 = { x: r.x + Math.cos(a + b) * L1, y: r.y + Math.sin(a + b) * L1 };
     const elbow = e1.y < e2.y ? e1 : e2;
-    return { root: r, elbow, wrist: { ...this.wrist }, bucket: this.bucket, load: this.carried };
+    // a bigger bucketful heaps up higher
+    const load = this.carried > 0 ? Math.min(1.4, 0.85 + this.carried * 0.12) : 0;
+    return { root: r, elbow, wrist: { ...this.wrist }, bucket: this.bucket, load };
   }
 
   private tipOnScreen(pose: ArmPose): Pt {
@@ -355,7 +372,6 @@ export class DigScene extends BaseScene {
       audio.horn();
       showConfetti(this, hole.x + hole.w / 2, 260, 36);
       showPraise(this, hole.x + hole.w / 2, 220, 'Hullet er gravet!');
-      award(this, 3, hole.x + hole.w / 2, this.gy);
       stageDoneButton(this, o => this.dyn(o));
     });
   }

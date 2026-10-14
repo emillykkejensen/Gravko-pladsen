@@ -66,7 +66,7 @@ export class SettingsScene extends BaseScene {
     const bought = SHOP_ITEMS.filter(i => gameState.owns(i.id)).length;
     const lines = [
       `${gameState.stars} stjerner at bruge, ${gameState.earned} tjent i alt — ${rankFor(gameState.earned).name}`,
-      `${gameState.project} bygninger færdige, ${gameState.town.length} i byen nu`,
+      `${gameState.town.length} bygninger i byen`,
       built.length ? `Maskiner bygget: ${built.join(', ')}` : 'Ingen maskiner bygget endnu',
       `${bought} af ${SHOP_ITEMS.length} ting købt i stjernebutikken`,
     ];

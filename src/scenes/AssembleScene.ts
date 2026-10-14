@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { COLORS, DEPTH, SIZE } from '../config';
+import { BUTTON_FLOOR, COLORS, DEPTH, SIZE } from '../config';
 import { gameState } from '../state/GameState';
 import { MACHINES, MachineId } from '../state/Machines';
-import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
+import { addBackButton, addSceneTitle, addStarCounter } from '../ui/Chrome';
 import { button, caption, plate } from '../helpers/Draw';
 import { dur, popIn, reduceMotion } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
@@ -201,7 +201,6 @@ export class AssembleScene extends BaseScene {
       showSparkle(this, t.x, t.y, 90, 70);
       showRing(this, t.x, t.y, COLORS.machine);
       const done = gameState.isBuilt(this.machine);
-      award(this, 1, t.x, t.y);
       if (done) {
         this.celebrate();
       }
@@ -226,7 +225,6 @@ export class AssembleScene extends BaseScene {
       audio.engine();
       showConfetti(this, cx, 220, 36);
       showPraise(this, cx, 200, `${MACHINES[this.machine].short} er bygget!`);
-      award(this, 3, cx, 240);
     });
     if (!reduceMotion()) {
       this.time.delayedCall(900, () => audio.horn());
@@ -241,7 +239,7 @@ export class AssembleScene extends BaseScene {
     const c = caption(this, this.scale.width / 2, 92, 'Færdig! Nu skal den have diesel og olie.', 'done');
     this.dyn(c);
 
-    const go = button(this, this.scale.width / 2, this.pileY, 'Gør den klar!', COLORS.green,
+    const go = button(this, this.scale.width / 2, Math.min(this.pileY, this.scale.height - BUTTON_FLOOR), 'Gør den klar!', COLORS.green,
       () => this.goTo('PrepScene', { machine: this.machine }), 250, 58, SIZE.heading);
     go.setName('go');
     this.dyn(go);

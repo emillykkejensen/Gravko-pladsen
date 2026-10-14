@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ALL_PARTS, AT, Game, readyMachine, readySave } from './game';
+import { ALL_PARTS, AT, Game, MACHINE_IDS, readyMachine, readySave, townOf } from './game';
 
 /**
  * Building a machine: parts are dragged from the floor onto the machine, in any order.
@@ -27,8 +27,8 @@ test('the signpost leads a new player to the workshop, and the excavator can be 
 
   const s = await game.state();
   expect(s.machines.gravko.parts).toHaveLength(6);
-  // one star a part, and three more for the finished machine
-  await game.expectState(st => st.stars, 'parts and the finished machine pay').toBe(9);
+  // stars are for buildings only: a machine is how they are earned, not a way to earn them
+  await game.expectState(st => st.stars, 'building a machine pays nothing').toBe(0);
   await game.expectScreenText('AssembleScene').toContain('Gør den klar!');
   await game.expectState(st => st.next.kind).toBe('prepare');
   game.expectNoErrors();
@@ -44,16 +44,18 @@ test('a part let go roughly near its place snaps on', async ({ page }) => {
   await game.drag(bucket, { x: where.x - 70, y: where.y + 50 });
 
   await game.expectState(s => s.machines.gravko.parts, 'it snaps on anyway').toEqual(['skovl']);
-  await game.expectState(s => s.stars, 'and pays its star').toBe(1);
+  expect((await game.state()).stars, 'and pays no star: only buildings do').toBe(0);
   game.expectNoErrors();
 });
 
-const MACHINES = ['gravko', 'lastbil', 'betonbil', 'kran', 'vejtromle', 'pael', 'taarnkran'];
+const MACHINES = MACHINE_IDS;
+/** Every machine after the first `n`, still locked. */
+const locked = (n: number) => Array(MACHINES.length - n).fill(false);
 
 test('on the first building, only the machine the site needs can be built', async ({ page }) => {
   const game = await Game.open(page);
   const unlocked = () => page.evaluate((ids) => ids.map(id => window.__state.isUnlocked(id)), MACHINES);
-  expect(await unlocked()).toEqual([true, false, false, false, false, false, false]);
+  expect(await unlocked()).toEqual([true, ...locked(1)]);
   expect(await page.evaluate(() => window.__state.placePart('lastbil', 'hjul')), 'a locked machine takes no parts')
     .toBe(false);
 
@@ -74,7 +76,7 @@ test('on the first building, only the machine the site needs can be built', asyn
     for (let i = 0; i < 8; i++) window.__state.dig(i);
     window.__state.completeStage();
   });
-  expect(await unlocked()).toEqual([true, true, false, false, false, false, false]);
+  expect(await unlocked()).toEqual([true, true, ...locked(2)]);
   game.expectNoErrors();
 });
 
@@ -86,7 +88,7 @@ test('the bigger buildings each bring a new machine, built like the rest', async
     machines: Object.fromEntries(['gravko', 'lastbil', 'betonbil', 'kran'].map(id => [id, readyMachine(id)])),
   }));
   expect(await page.evaluate((ids) => ids.map(id => window.__state.isUnlocked(id)), MACHINES))
-    .toEqual([true, true, true, true, true, false, false]);
+    .toEqual([true, true, true, true, true, ...locked(5)]);
   await game.expectState(s => s.next).toMatchObject({ kind: 'assemble', machine: 'vejtromle' });
 
   await game.goTo('GarageScene');
@@ -96,16 +98,22 @@ test('the bigger buildings each bring a new machine, built like the rest', async
   await game.tapNamed('GarageScene', 'card:vejtromle');
   await game.waitForScene('AssembleScene');
   await placeAll(game, 'vejtromle', ['hus', 'tromle', 'motor', 'hjul', 'ramme']);
-  // one star a part, and three for the finished machine
-  await game.expectState(s => s.stars, 'parts and the finished machine pay').toBe(8);
+  expect((await game.state()).stars, 'only buildings pay stars').toBe(0);
   await game.expectState(s => s.next).toMatchObject({ kind: 'prepare', machine: 'vejtromle' });
   game.expectNoErrors();
 });
 
-for (const [machine, project, stage] of [['pael', 2, 0], ['taarnkran', 3, 5]] as const) {
+// each of the town's big buildings brings one more: the stage index is where it is first used
+const BRINGS = [
+  ['pael', 2, 0], ['taarnkran', 3, 5],
+  ['bulldozer', 4, 0], ['laesser', 5, 0], ['nedriv', 6, 0], ['asfalt', 7, 9], ['lift', 8, 9],
+] as const;
+
+for (const [machine, project, stage] of BRINGS) {
   test(`the ${machine} can be built in any order once its building needs it`, async ({ page }) => {
     const game = await Game.openWithSave(page, readySave({ stage }, {
       project,
+      town: townOf(project),
       machines: Object.fromEntries(MACHINES.filter(id => id !== machine).map(id => [id, readyMachine(id)])),
     }));
     await game.goTo('AssembleScene', { machine });

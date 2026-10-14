@@ -7,12 +7,18 @@ A building-site game for children (roughly ages 4–8), in Danish. Assemble an e
 dump truck, a concrete mixer and a mobile crane from their parts, fill them with diesel and
 oil, and use them to build houses — dig the hole, lay the gravel, pour the foundation, lift
 the steel frame — then paint each house and watch it move into the town. The bigger
-buildings need bigger machines: a road roller, a pile driver and a tower crane.
+buildings need bigger machines: a road roller, a pile driver and a tower crane, and then the
+town's own big buildings — a bus station, a fire station, a police station, a railway station
+and a hospital — each bring one more: a bulldozer, a wheel loader, a wrecking crane, an
+asphalt paver and a lift truck. Twelve machines in all.
 
 Several children can share one tablet: each picks their own card on the title screen and
-gets their own town, machines and stars back exactly as they left them. Stars are spent in
-the star shop, on things for the town, a new colour for the machines and new paint for the
-houses. The game fills the whole screen, whatever its shape.
+gets their own town, machines and stars back exactly as they left them. Stars are earned only
+by finishing a building, and spent in the star shop: on things for the town, vehicles for its
+buildings, a new colour for the machines, new paint for the houses and upgrades that let a
+machine do more at a time. The town is a long road the child slides along, with every
+building still to come standing faded on its plot. The game fills the whole screen,
+whatever its shape.
 
 ## How a house gets built
 
@@ -21,24 +27,38 @@ bigger buildings add stages of their own:
 
 | Stage | Machine | What the child does | Scene |
 | --- | --- | --- | --- |
+| Riv det gamle skur ned | Nedrivningskranen | pulls the wrecking ball back and lets go; each swing knocks blocks down | `WreckScene` |
+| Saml stenene op | Læssemaskinen | drives the loader into each rock, then back to tip it in the skip | `RockScene` |
+| Skub jorden flad | Bulldozeren | pushes the blade into the heaps of earth until they are flat | `PlanerScene` |
 | Bank pælene ned | Pælerammen | drives the rig over each cross, then *Bank!* three times a pile | `PileScene` |
 | Grav hullet | Gravkoen | drags the bucket into the earth and back over the heap | `DigScene` |
 | Kør grus i hullet | Lastbilen | backs the truck up to the stop sign, then tips | `GravelScene` |
 | Tril gruset fast | Vejtromlen | drives the roller back and forth until the heaps are flat | `RollScene` |
 | Støb fundamentet | Betonbilen | holds the chute over each section of formwork; the sun dries it | `PourScene` |
-| Byg stålskelettet | Kranbilen, or Tårnkranen for the high-rise | drags each steel frame (and the roof) into place | `CraneScene` |
+| Byg stålskelettet | Kranbilen, or Tårnkranen for the tall ones | drags each steel frame (and the roof) into place | `CraneScene` |
+| Sæt vinduerne i | Liftbilen | drags the basket up to each window opening | `WindowScene` |
+| Læg asfalt | Asfaltmaskinen | drives the paver along; the screed leaves asphalt behind it | `AsphaltScene` |
 | Mal huset | — | picks a colour, then *Flyt ind!* | `CraneScene` |
 
-| Building | Stages | New machine |
-| --- | --- | --- |
-| *Det lille hus* | grav, grus, støb, rejs, mal | the first four |
-| *Villaen* (two storeys) | … adds *tril gruset fast* before the foundation | Vejtromlen |
-| *Butikken* (wide, with an awning) | … adds *bank pælene ned* before anything is dug | Pælerammen |
-| *Højhuset* (four storeys) | … raised by the tower crane instead of the mobile one | Tårnkranen |
+| Building | Stages | New machine | Stars |
+| --- | --- | --- | --- |
+| *Det lille hus* | grav, grus, støb, rejs, mal | the first four | 5 |
+| *Villaen* (two storeys) | … adds *tril gruset fast* before the foundation | Vejtromlen | 6 |
+| *Butikken* (wide, with an awning) | … adds *bank pælene ned* before anything is dug | Pælerammen | 8 |
+| *Højhuset* (four storeys) | … raised by the tower crane instead of the mobile one | Tårnkranen | 10 |
+| *Busstationen* (glass front, canopy, stop sign) | … adds *skub jorden flad* first | Bulldozeren | 10 |
+| *Brandstationen* (red engine doors, hose tower) | … adds *saml stenene op* | Læssemaskinen | 12 |
+| *Politistationen* (blue band and light) | … adds *riv det gamle skur ned* | Nedrivningskranen | 12 |
+| *Togstationen* (station clock) | … adds *læg asfalt* after the frame | Asfaltmaskinen | 14 |
+| *Hospitalet* (red cross, helipad, four storeys) | … adds *sæt vinduerne i*, and the tower crane | Liftbilen | 15 |
 
-So each bigger building starts with a trip to the workshop to build something new. The
-stage lists are data (`stages` on each project in `state/Projects.ts`); a scene only plays
-one stage, and `GameState.stage` is whatever the current building's list says is next.
+So each bigger building starts with a trip to the workshop to build something new, and a new
+job stays on for every building after it: the hospital uses all twelve machines. After the
+hospital the road keeps going with houses — the first four shapes in turn, worth 8 stars
+each — and each one borrows one of the big buildings' jobs, so every machine keeps getting
+work. The stage lists are data (`stages` on each project in `state/Projects.ts`, and
+`projectAt()` for the houses after the hospital); a scene only plays one stage, and
+`GameState.stage` is whatever the current building's list says is next.
 
 Before a machine can do its first job it has to be **built** in the workshop — each part
 dragged from the floor onto a pale silhouette of the finished machine, in any order. Picking
@@ -54,6 +74,11 @@ snaps it on — and then **made ready**:
 | Vejtromle | tromle, ramme, baghjul, motor, førerhus | squirt water on three dry spots |
 | Pæleramme | bælter, krop, førerhus, mast, faldlod | switch on three lamps |
 | Tårnkran | fundament, tårn, førerhus, udligger, kontravægt, krog | hoist three Danish flags — a *rejsegilde* in miniature |
+| Bulldozer | bælter, krop, motor, førerhus, skraber | wash three mud spots off it |
+| Læssemaskine | hjul, ramme, førerhus, løftearm, skovl | grease three joints on the arm |
+| Nedrivningskran | bælter, krop, førerhus, kranarm, kugle | tighten three bolts on the boom and the chain |
+| Asfaltmaskine | bælter, krop, tragt, førersæde, glattebjælke | switch on the heaters and the beacon |
+| Liftbil | hjul, ramme, førerhus, liftarm, kurv | pump three tyres |
 
 Every machine also takes diesel (hold the nozzle on the filler cap) and oil (hold the can on
 the oil cap).
@@ -63,9 +88,23 @@ time a machine comes back to the pump every other job. Filling is held rather th
 the nozzle stays on the cap while the gauge climbs — because that is what filling a tank
 feels like, and it gives the gauge something to show.
 
-Projects grow: *Det lille hus*, *Villaen*, *Butikken*, *Højhuset*, then round again. The
-town has eight plots; when they are all full there is a celebration and the next house
-starts a new town.
+### The town's long road
+
+Every building has its own plot along a road longer than the screen, in the order they are
+built, and the child slides it left and right with a finger (a flick keeps it gliding; the
+arrows at either end slide it a screen along). The buildings not built yet stand on their
+plots **faded, with their names over them**, so a child can see the fire station and the
+hospital waiting for them from the very first house; a little orange flag marks the one on
+the building site now. Tapping a building says what it is, or that it is coming.
+
+Only the town slides. The workshop, the signpost and the building site stay put — their
+objects ignore the camera (`setScrollFactor(0)`) while everything on the road follows it —
+so the way to the next job never moves. The road's drawing is baked in pieces no wider than
+a texture can be (`flattenWide()` in `helpers/Flatten.ts`), and the road remembers where it
+was slid to, per player, for the next time the town is opened.
+
+The town never fills up: when the hospital moves in there is a celebration, *Byen er
+færdig!*, and the road carries on with houses.
 
 ### The signpost
 
@@ -92,19 +131,51 @@ steel frame goes. A child who cannot read the hint line can still play the whole
 
 ### Stars and the star shop
 
-Stars are earned for effort: one per part snapped on, one each for a full tank, a full can
-and the machine's own job, one per pile banked in, three for a finished machine or stage,
-five for a house moving into town. A star is paid by the state transition, never by the
+Stars are earned for one thing only: **a finished building moving into the town**. Each
+building is worth its own number (`stars` on each project) — 5 for the little house up to 15
+for the hospital — so a bigger building is a bigger reward, and stars stay worth something.
+Building a machine, filling it up and finishing a stage are their own reward (a clank, a
+sparkle, confetti) and pay nothing. A star is paid by the state transition, never by the
 tap, so nothing can be farmed.
 
 They are spent in the **Stjernebutik**, the button under the star counter in the town (a
-red badge says how many things the child can afford right now). Three shelves:
+red badge says how many things the child can afford right now, and a red dot on a shelf's
+tab says there is something there). Five shelves:
 
 | Shelf | What | Where it shows |
 | --- | --- | --- |
-| Byen | street lamps, bunting, trees, a bus, a wind turbine, a balloon, fireworks, a golden excavator | in the town, each in a place of its own |
-| Maskinerne | red, blue, green, pink, purple or gold paint for every machine | every machine, everywhere; yellow is always free to go back to |
+| Byen | street lamps, bunting, trees, a wind turbine, a balloon, fireworks, a golden excavator | in the town, each in a place of its own |
+| Biler | a bus, a fire engine, a police car, a train, an ambulance and a rescue helicopter | driving along the road, the train on its own rails behind the houses, the helicopter over the hospital |
+| Farver | red, blue, green, pink, purple or gold paint for every machine | every machine, everywhere; yellow is always free to go back to |
 | Husene | orange, turquoise, white, brown and rainbow paint | as more paint pots when a house is painted |
+| Opgrader | two upgrades for each machine | the machine does more at a time |
+
+**What can be bought depends on what is built.** Each vehicle waits for its building — the
+bus for the bus station, the fire engine for the fire station, the police car for the police
+station, the train for the railway station, the ambulance and the helicopter for the
+hospital — and each upgrade for its machine to be built, the second for the first. Things
+that cannot be bought yet still show, greyed with a padlock and what they are waiting for
+(*Byg busstationen*), so the child knows they are coming. `GameState.isAvailable()` decides;
+`buy()` refuses anything not available. A bus bought before this rule came in stays bought.
+
+### Upgrades
+
+Every machine has two upgrades, bought in turn in the shop (5 and 10 stars): the first lets
+it do twice as much at a time, the second four times. `GameState.capacity(machine)` is 1, 2
+or 4, and each job uses it:
+
+| Machine | Upgrades | What changes |
+| --- | --- | --- |
+| Gravko | Stor skovl, Kæmpeskovl | each bucketful scoops 2, then 4 chunks of earth |
+| Lastbil | Stort lad, Kæmpelad | each trip brings 2, then 4 loads of gravel — the whole hole in one go |
+| Betonbil, Vejtromle, Bulldozer, Asfaltmaskine | bigger drum, roller, blade, screed | each pass does 2, then 4 times as much |
+| Kranbil, Tårnkran | Stærk krog, Superkrog | lifts 2, then 4 floors at once, stacked on the hook |
+| Pæleramme | Tungt lod, Kæmpelod | a pile goes in with 2 bangs, then 1 |
+| Læssemaskine | Stor skovl, Kæmpeskovl | the bucket carries 2, then 4 rocks to the skip |
+| Nedrivningskran | Tung kugle, Kæmpekugle | each swing knocks 2, then 4 blocks down |
+| Liftbil | Stor kurv, Kæmpekurv | each window put in brings the 1, then 3 beside it on the same floor |
+
+The workshop shows a little star by a machine's name for each upgrade it has.
 
 Every town decoration has a place no other one uses — the sky, the hills behind the houses,
 the road, the gaps on the pavement — so buying all of them never stacks one on another and
@@ -114,7 +185,17 @@ livery with `inLivery()` and the site's machines change the moment it is bought.
 
 Spending never costs a rank. `GameState` keeps two counts — `stars`, the balance, and
 `earned`, every star ever earned — and the rank ladder (*Lærling* → *Byens helt*) reads
-`earned`. Nothing bought can be lost, and "Start forfra" is the only thing that clears it.
+`earned`; its steps are set so the first house makes a *Hjælper* and the town's own nine
+buildings a *Mesterbygger*. Nothing bought can be lost, and "Start forfra" is the only thing
+that clears it.
+
+### Buttons away from the bottom edge
+
+A phone's home gesture starts at the bottom edge, and a child pressing a big button that
+hugged it kept swiping out of the game by mistake. Every button a child presses keeps its
+middle at least `BUTTON_FLOOR` (96) above the bottom of the stage — *Videre!*, *Flyt ind!*
+and the paint pots, *Kør på arbejde!*, *Gør den klar!*, *Tip!*, *Bank!*, *Færdig* — and the
+workshop leaves room under its bottom row of bays.
 
 ## Running it
 
@@ -156,7 +237,7 @@ That works because scenes lay themselves out from `this.scale.width`/`height`:
 
 - **scenery** — the sky, the ground, the workshop wall — runs across the whole stage;
 - **chrome** — the back button, the star counter, the title — hangs off the edges;
-- the **town** spreads its eight plots across the full width;
+- the **town** is a road as long as it needs, which slides; a wider stage just shows more of it;
 - each **scene's own layout**, written for 880×550, is centred across and stood on the
   bottom: `BaseScene` has `dx` and `dy` to add to a design x and y, and `groundY()` /
   `floorY()` in `SiteArt` give the ground and the workshop floor on any stage. A taller
@@ -223,20 +304,20 @@ src/
   state/
     GameState.ts         all persisted progress; the single source of truth
     Profiles.ts          who the players are, where each one's save lives, migration and restore
-    Machines.ts          the seven machines as data: parts, the third job
-    Projects.ts          the stages, the buildings and which stages each goes through
-    Shop.ts              the star shop's catalogue: town things, liveries, house paints
+    Machines.ts          the twelve machines as data: parts, the third job
+    Projects.ts          the stages, the buildings, which stages each goes through, its stars
+    Shop.ts              the star shop's catalogue: town things, vehicles, liveries, house paints, upgrades
   objects/
     MachineArt.ts        every machine drawn part by part, with poses and a livery
     SiteArt.ts           sky, ground in cross-section, holes, piles, foundations, houses, workshop
-    TownArt.ts           what the star shop puts in the town, and where
+    TownArt.ts           what the star shop puts in the town — vehicles too — and where
     FeedbackEffects.ts   star bursts, confetti, praise, toasts
   scenes/
     BaseScene.ts         the four-layer background/ambient/dynamic/effects pattern
     BootScene.ts         waits for the webfont and the native restore, then the menu
     MainMenuScene.ts     title screen: a card per player, a waving excavator, the way out
     ProfileScene.ts      a new player: pick an animal, type a name on the on-screen keyboard
-    TownScene.ts         the hub: the town, the workshop, the site, the signpost, the shop
+    TownScene.ts         the hub: the sliding town, the workshop, the site, the signpost, the shop
     GarageScene.ts       one bay per machine, with its tanks and what it still needs
     AssembleScene.ts     drag parts onto the machine
     PrepScene.ts         diesel, oil and the machine's own job
@@ -244,14 +325,19 @@ src/
     DigScene.ts          the excavator, steered by its bucket (two-bone IK)
     GravelScene.ts       back the truck up, tip the gravel
     RollScene.ts         roll the gravel heaps flat
+    WreckScene.ts        swing the wrecking ball into the old shed
+    RockScene.ts         scoop the rocks with the wheel loader and tip them in the skip
+    PlanerScene.ts       push the heaps of earth flat with the bulldozer
     PourScene.ts         the mixer's chute, the formwork, the drying
     CraneScene.ts        lift the frames with either crane, then paint the house
-    ShopScene.ts         spend stars, on three shelves
+    WindowScene.ts       put the windows in from the lift truck's basket
+    AsphaltScene.ts      lay asphalt with the paver
+    ShopScene.ts         spend stars, on five shelves
     SettingsScene.ts     one player's sound, progress, "start over" and "delete", for grown-ups
   helpers/
     Draw.ts              shared shapes: plates, captions, buttons, scenery
     Motion.ts            prefers-reduced-motion handling, transitions, entrance animation
-    Flatten.ts           bakes static drawing to a texture (see below)
+    Flatten.ts           bakes static drawing to a texture (see below), in pieces for the long road
     Stage.ts             gives the stage the screen's shape, and follows it when it turns
     Route.ts             where the next thing to do lives
     Audio.ts             synthesised sound effects and music
@@ -268,9 +354,11 @@ tests/
   assemble.spec.ts       building machines in any order, rough drops, locked machines
   prepare.spec.ts        filling tanks by holding, each machine's third job
   site.spec.ts           each stage's mechanics, fuel use, and the signpost's order
+  jobs.spec.ts           the big buildings' jobs: wrecking, rocks, bulldozing, windows, asphalt
+  town.spec.ts           the sliding road, stars for buildings only, upgrades, the bottom edge
   state.spec.ts          reloads, damaged and old saves, starting over, a full town
   profiles.spec.ts       players: creating, switching, resetting, deleting, migrating, restoring
-  shop.spec.ts           buying, liveries, house paints, the rank staying put
+  shop.spec.ts           buying, vehicles waiting for buildings, upgrades in order, the rank staying put
   screen.spec.ts         a phone and a tablet, and turning the screen
   native.spec.ts         the Android back button and offline play
   sound.spec.ts          the audio contract
@@ -324,8 +412,14 @@ Version 2 added the bigger buildings' stages, so `site.stage` now counts in the 
 building's own list. A version 1 save counted in the old five stages; `load()` finds the
 same stage in the new list, and whatever the bigger building added before it counts as done
 — a high-rise at its old *rejs* comes back at the tower crane's stage, and asks for the tower
-crane to be built. Its stars all count as earned. A save from any other version starts fresh
-rather than half-loading.
+crane to be built. Its stars all count as earned.
+
+Version 3 gave every building its own plot on the long road, and the town's big buildings.
+A building's `project` is now its plot. An older save's town is laid out on the new road:
+the first four buildings on their own plots — counted as built even if a full town had swept
+them away — and every later house past the hospital, in the same shapes and colours. A save
+that was past the first four starts on the bus station; one that was not carries on where it
+was. A save from any other version starts fresh rather than half-loading.
 
 Tank filling is called every frame while the nozzle is held, so it does not write the save
 itself except on the frame the tank becomes full; the scene saves when the nozzle is let go.

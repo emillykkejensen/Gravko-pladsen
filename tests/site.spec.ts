@@ -250,8 +250,8 @@ test('the pile driver drives to each cross, and three bangs put a pile in', asyn
   }
   await game.expectState(s => s.stage, 'then the hole is dug').toBe('grav');
   expect((await game.state()).machines.pael.diesel, 'the job used half a tank').toBe(0.5);
-  // one star a pile and three for the job, on top of nothing
-  expect((await game.state()).stars).toBe(6);
+  // a stage pays no stars: only the finished building does
+  expect((await game.state()).stars).toBe(0);
   await game.expectScreenText('PileScene').toContain('Videre!');
   game.expectNoErrors();
 });

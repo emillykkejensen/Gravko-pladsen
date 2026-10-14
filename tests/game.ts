@@ -24,6 +24,11 @@ export const ALL_PARTS: Record<string, string[]> = {
   vejtromle: ['tromle', 'ramme', 'hjul', 'motor', 'hus'],
   pael: ['baelter', 'krop', 'hus', 'mast', 'lod'],
   taarnkran: ['fod', 'taarn', 'top', 'udligger', 'vaegt', 'krog'],
+  bulldozer: ['baelter', 'krop', 'motor', 'hus', 'skraber'],
+  laesser: ['hjul', 'ramme', 'hus', 'arm', 'skovl'],
+  nedriv: ['baelter', 'krop', 'hus', 'bom', 'kugle'],
+  asfalt: ['baelter', 'krop', 'tragt', 'hus', 'glatter'],
+  lift: ['hjul', 'ramme', 'hus', 'arm', 'kurv'],
 };
 
 export const MACHINE_IDS = Object.keys(ALL_PARTS);
@@ -38,7 +43,11 @@ export const emptyMachine = () => ({ parts: [], diesel: 0, oil: 0, extra: [false
 
 type Site = Partial<{
   stage: number; dug: number[]; gravel: number; rolled: number[]; poured: number[]; placed: number; piles: number[];
+  planed: number[]; rocks: number[]; wrecked: number; paved: number[]; windows: number[];
 }>;
+
+/** The town with its first `n` buildings standing, each on its own plot. */
+export const townOf = (n: number) => Array.from({ length: n }, (_, i) => ({ project: i, color: i % 6 }));
 
 /** A save with every machine ready, at the given stage of the first project (or `patch.project`). */
 export function readySave(site: Site = {}, patch: Record<string, unknown> = {}) {
@@ -93,7 +102,7 @@ export class Game {
   /** A whole save in the current format, with `patch` laid over a new game. */
   static saveWith(patch: Record<string, unknown>): Record<string, unknown> {
     return {
-      version: 2,
+      version: 3,
       stars: 0,
       machines: Object.fromEntries(MACHINE_IDS.map(id => [id, emptyMachine()])),
       project: 0,

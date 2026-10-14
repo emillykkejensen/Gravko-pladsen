@@ -4,19 +4,22 @@ import {
   DIESEL_PER_JOB, EXTRA_SPOTS, MACHINE_IDS, MACHINES, MachineId, OIL_PER_JOB,
 } from './Machines';
 import {
-  BANGS_PER_PILE, ProjectDef, StageDef, StageId, TOWN_PLOTS, V1_STAGES, firstUse, projectAt, stagesOf,
+  BANGS_PER_PILE, LANDMARKS, PROJECTS, ProjectDef, StageDef, StageId, V1_STAGES, firstUse, framePieces,
+  projectAt, projectById, stagesOf, windowSpots,
 } from './Projects';
 import { Profile, findProfile, lastProfileId, migrateLegacySave, saveKeyFor, setLastProfile } from './Profiles';
-import { DEFAULT_LIVERY, LIVERIES, itemById } from './Shop';
+import { CAPACITY, DEFAULT_LIVERY, LIVERIES, SHOP_ITEMS, ShopItem, UPGRADES, Upgrade, itemById } from './Shop';
 
 /**
  * All persisted progress. The single source of truth: scenes mutate it, then redraw from it.
  *
- * Mutators that stand for a one-time achievement return a boolean, so a scene can pay a
- * star only on the transition and never on a repeated tap:
+ * Mutators that stand for a one-time achievement return a boolean, so a scene can celebrate
+ * only on the transition and never on a repeated tap:
  *
  *   if (!gameState.placePart('gravko', 'bom')) return;   // already on, or machine still locked
- *   award(this);
+ *   audio.clank();
+ *
+ * Stars are paid for one thing only: a finished building moving into the town.
  *
  * Every player has their own copy, under their own key (see state/Profiles); `profileId` says
  * whose is on the table.
@@ -24,9 +27,12 @@ import { DEFAULT_LIVERY, LIVERIES, itemById } from './Shop';
 
 /**
  * Version 2 added the bigger buildings' stages, so a version 1 save counts its stage in the
- * old five-stage list and is translated on load. Anything else starts fresh.
+ * old five-stage list and is translated on load. Version 3 gave every building its own plot
+ * on a road that keeps going, and added the town's big buildings after the high-rise; an
+ * older save keeps its first four buildings on their plots and its later houses further down
+ * the road. Anything else starts fresh.
  */
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 export interface MachineState {
   /** Parts snapped into place, in the order they went on. */
@@ -54,10 +60,20 @@ export interface SiteState {
   placed: number;
   /** How many times each pile has been hit; BANGS_PER_PILE drives it all the way down. */
   piles: number[];
+  /** How flat each heap of earth has been pushed, 0-1. */
+  planed: number[];
+  /** Rocks tipped into the skip, by index. */
+  rocks: number[];
+  /** Blocks of the old shed knocked down. */
+  wrecked: number;
+  /** How much of each strip of asphalt is laid, 0-1. */
+  paved: number[];
+  /** Windows put in, by index into windowSpots(). */
+  windows: number[];
 }
 
 export interface Building {
-  /** Which project it was — decides its shape. */
+  /** Which project it was — decides its shape, and is the plot it stands on. */
   project: number;
   /** Paint colour, as a PAINT index. */
   color: number;
@@ -79,7 +95,7 @@ class GameState {
   /** Every star ever earned. The rank ladder reads this, so spending never costs a rank. */
   earned = 0;
   machines: Record<MachineId, MachineState> = this.freshMachines();
-  /** How many buildings have been started — the current one is projectAt(project). */
+  /** The building on the site: projectAt(project), and the plot it moves into. */
   project = 0;
   site: SiteState = this.freshSite();
   town: Building[] = [];
@@ -118,7 +134,10 @@ class GameState {
   }
 
   private freshSite(): SiteState {
-    return { stage: 0, dug: [], gravel: 0, rolled: [], poured: [], placed: 0, piles: [] };
+    return {
+      stage: 0, dug: [], gravel: 0, rolled: [], poured: [], placed: 0, piles: [],
+      planed: [], rocks: [], wrecked: 0, paved: [], windows: [],
+    };
   }
 
   private freshSettings(): Settings {
@@ -211,6 +230,20 @@ class GameState {
     return true;
   }
 
+  /* ------------------------------------------------------------------ upgrades --- */
+
+  /** How many of a machine's upgrades have been bought: 0, 1 or 2. */
+  level(id: MachineId): number {
+    let n = 0;
+    while (n < 2 && UPGRADES.some(u => u.machine === id && u.level === n + 1 && this.owns(u.id))) n++;
+    return n;
+  }
+
+  /** How many times as much a machine does at a time: 1, 2 or 4. */
+  capacity(id: MachineId): number {
+    return CAPACITY[this.level(id)];
+  }
+
   /* ----------------------------------------------------------------- the project --- */
 
   get currentProject(): ProjectDef {
@@ -233,17 +266,39 @@ class GameState {
     return i >= 0 && i < this.site.stage;
   }
 
-  get townFull(): boolean {
-    return this.town.length >= TOWN_PLOTS;
+  /** Whether one of the town's own buildings (by its id, "busstation") stands in the town. */
+  hasBuilt(projectId: string): boolean {
+    const p = projectById(projectId);
+    return !!p && this.town.some(b => b.project === p.index);
   }
 
-  /** One hit of the pile driver's hammer. True on the hit that drives the pile all the way in. */
+  /** The building standing on a plot, if any. */
+  buildingAt(plot: number): Building | null {
+    return this.town.find(b => b.project === plot) ?? null;
+  }
+
+  /** The first plot with nothing on it: where the next building goes. */
+  private firstFreePlot(): number {
+    let i = 0;
+    while (this.town.some(b => b.project === i)) i++;
+    return i;
+  }
+
+  /** Whether everything the town was waiting for is built: the road goes on with houses. */
+  get landmarksDone(): boolean {
+    return PROJECTS.every(p => this.town.some(b => b.project === p.index));
+  }
+
+  /**
+   * One hit of the pile driver's hammer. True on the hit that drives the pile all the way in.
+   * A heavier weight drives it further each time.
+   */
   bang(pile: number): boolean {
     const n = this.currentProject.piles;
     if (this.stage.id !== 'pael' || pile < 0 || pile >= n) return false;
     while (this.site.piles.length < n) this.site.piles.push(0);
     if (this.site.piles[pile] >= BANGS_PER_PILE) return false;
-    this.site.piles[pile]++;
+    this.site.piles[pile] = Math.min(BANGS_PER_PILE, this.site.piles[pile] + this.capacity('pael'));
     this.save();
     return this.site.piles[pile] >= BANGS_PER_PILE;
   }
@@ -272,14 +327,46 @@ class GameState {
     return true;
   }
 
+  /**
+   * One bucketful: the chunk the teeth bit into, and as many more as a bigger bucket holds —
+   * the nearest ones it can reach, down the same column first. Returns what was dug.
+   */
+  scoop(chunk: number): number[] {
+    if (!this.dig(chunk)) return [];
+    const got = [chunk];
+    const { holeCols, holeRows } = this.currentProject;
+    const col0 = Math.floor(chunk / holeRows);
+    const room = this.capacity('gravko');
+    while (got.length < room) {
+      let best = -1;
+      let bestScore = Infinity;
+      for (let i = 0; i < holeCols * holeRows; i++) {
+        if (!this.canDig(i)) continue;
+        const score = Math.abs(Math.floor(i / holeRows) - col0) * 10 + (i % holeRows);
+        if (score < bestScore) {
+          bestScore = score;
+          best = i;
+        }
+      }
+      if (best < 0 || !this.dig(best)) break;
+      got.push(best);
+    }
+    return got;
+  }
+
   get holeDug(): boolean {
     const { holeCols, holeRows } = this.currentProject;
     return this.site.dug.length >= holeCols * holeRows;
   }
 
+  /** Loads one trip of the truck brings: more with a bigger bed, never more than is needed. */
+  get gravelPerTrip(): number {
+    return Math.max(1, Math.min(this.capacity('lastbil'), this.currentProject.gravelLoads - this.site.gravel));
+  }
+
   tipGravel(): boolean {
     if (this.stage.id !== 'grus' || this.gravelDone) return false;
-    this.site.gravel++;
+    this.site.gravel = Math.min(this.currentProject.gravelLoads, this.site.gravel + this.gravelPerTrip);
     this.save();
     return true;
   }
@@ -298,7 +385,7 @@ class GameState {
     if (this.stage.id !== 'tromle' || cell < 0 || cell >= cells) return false;
     while (this.site.rolled.length < cells) this.site.rolled.push(0);
     if (this.site.rolled[cell] >= 1) return false;
-    this.site.rolled[cell] = Math.min(1, this.site.rolled[cell] + amount);
+    this.site.rolled[cell] = Math.min(1, this.site.rolled[cell] + amount * this.capacity('vejtromle'));
     if (this.site.rolled[cell] >= 1) {
       this.save();
       return true;
@@ -317,7 +404,7 @@ class GameState {
     if (this.stage.id !== 'stoeb' || cell < 0 || cell >= cells) return false;
     while (this.site.poured.length < cells) this.site.poured.push(0);
     if (this.site.poured[cell] >= 1) return false;
-    this.site.poured[cell] = Math.min(1, this.site.poured[cell] + amount);
+    this.site.poured[cell] = Math.min(1, this.site.poured[cell] + amount * this.capacity('betonbil'));
     if (this.site.poured[cell] >= 1) {
       this.save();
       return true;
@@ -330,22 +417,145 @@ class GameState {
     return this.site.poured.length >= cells && this.site.poured.slice(0, cells).every(f => f >= 1);
   }
 
-  /** The next steel frame (or the roof) lifted into place, by either crane. */
+  /**
+   * How many pieces the crane lifts in one go: one frame, or with a stronger hook two or four
+   * at once, stacked — never more than are left.
+   */
+  get liftCount(): number {
+    const id = this.stage.id;
+    const crane: MachineId = id === 'taarn' ? 'taarnkran' : 'kran';
+    const left = framePieces(this.currentProject) - this.site.placed;
+    return Math.max(1, Math.min(this.capacity(crane), left));
+  }
+
+  /** The next steel frame (or the roof), or the next few, lifted into place by either crane. */
   placePiece(): boolean {
     const id = this.stage.id;
     if ((id !== 'rejs' && id !== 'taarn') || this.frameDone) return false;
-    this.site.placed++;
+    this.site.placed = Math.min(framePieces(this.currentProject), this.site.placed + this.liftCount);
     this.save();
     return true;
   }
 
   get frameDone(): boolean {
-    return this.site.placed >= this.currentProject.floors + 1;
+    return this.site.placed >= framePieces(this.currentProject);
+  }
+
+  /**
+   * The bulldozer's blade going over one heap of earth. Called every frame while it pushes,
+   * so like `roll` it writes the save only on the frame the heap is flat, and returns true on
+   * exactly that frame.
+   */
+  plane(mound: number, amount: number): boolean {
+    const n = this.currentProject.mounds;
+    if (this.stage.id !== 'planer' || mound < 0 || mound >= n) return false;
+    while (this.site.planed.length < n) this.site.planed.push(0);
+    if (this.site.planed[mound] >= 1) return false;
+    this.site.planed[mound] = Math.min(1, this.site.planed[mound] + amount * this.capacity('bulldozer'));
+    if (this.site.planed[mound] >= 1) {
+      this.save();
+      return true;
+    }
+    return false;
+  }
+
+  get groundFlat(): boolean {
+    const n = this.currentProject.mounds;
+    return this.site.planed.length >= n && this.site.planed.slice(0, n).every(f => f >= 1);
+  }
+
+  /** Whether a rock still lies on the plot (not yet tipped in the skip). */
+  rockLeft(rock: number): boolean {
+    return rock >= 0 && rock < this.currentProject.rocks && !this.site.rocks.includes(rock);
+  }
+
+  /** Rocks the wheel loader's bucket holds at once. */
+  get bucketRocks(): number {
+    return this.capacity('laesser');
+  }
+
+  /** The loader's bucketful tipped into the skip. True if any rock was new. */
+  dumpRocks(rocks: number[]): boolean {
+    if (this.stage.id !== 'sten') return false;
+    const fresh = [...new Set(rocks)].filter(r => this.rockLeft(r));
+    if (!fresh.length) return false;
+    this.site.rocks.push(...fresh);
+    this.save();
+    return true;
+  }
+
+  get rocksCleared(): boolean {
+    const n = this.currentProject.rocks;
+    return Array.from({ length: n }, (_, i) => i).every(i => this.site.rocks.includes(i));
+  }
+
+  /** One swing of the wrecking ball into the shed. Returns how many blocks came down. */
+  wreck(): number {
+    const n = this.currentProject.shed;
+    if (this.stage.id !== 'riv' || this.site.wrecked >= n) return 0;
+    const down = Math.min(this.capacity('nedriv'), n - this.site.wrecked);
+    this.site.wrecked += down;
+    this.save();
+    return down;
+  }
+
+  get shedDown(): boolean {
+    return this.site.wrecked >= this.currentProject.shed;
+  }
+
+  /** The paver laying asphalt on one strip. True on the frame the strip is done. */
+  pave(cell: number, amount: number): boolean {
+    const n = this.currentProject.asphalt;
+    if (this.stage.id !== 'asfalt' || cell < 0 || cell >= n) return false;
+    while (this.site.paved.length < n) this.site.paved.push(0);
+    if (this.site.paved[cell] >= 1) return false;
+    this.site.paved[cell] = Math.min(1, this.site.paved[cell] + amount * this.capacity('asfalt'));
+    if (this.site.paved[cell] >= 1) {
+      this.save();
+      return true;
+    }
+    return false;
+  }
+
+  get asphaltLaid(): boolean {
+    const n = this.currentProject.asphalt;
+    return this.site.paved.length >= n && this.site.paved.slice(0, n).every(f => f >= 1);
+  }
+
+  /**
+   * A window put in from the lift's basket, and with a bigger basket the ones beside it on the
+   * same floor. Returns the windows that went in.
+   */
+  putWindow(spot: number): number[] {
+    const spots = windowSpots(this.currentProject);
+    if (this.stage.id !== 'vinduer' || spot < 0 || spot >= spots.length || this.site.windows.includes(spot)) return [];
+    const got = [spot];
+    const floor = spots[spot].floor;
+    const near = spots
+      .map((s, i) => ({ s, i }))
+      .filter(({ s, i }) => s.floor === floor && i !== spot && !this.site.windows.includes(i))
+      .sort((a, b) => Math.abs(a.s.slot - spots[spot].slot) - Math.abs(b.s.slot - spots[spot].slot));
+    for (const { i } of near) {
+      if (got.length >= this.capacity('lift')) break;
+      got.push(i);
+    }
+    this.site.windows.push(...got);
+    this.save();
+    return got;
+  }
+
+  get windowsIn(): boolean {
+    return this.site.windows.length >= windowSpots(this.currentProject).length;
   }
 
   /** Whether the current stage's own work is finished and it can be signed off. */
   get stageWorkDone(): boolean {
     switch (this.stage.id) {
+      case 'riv': return this.shedDown;
+      case 'sten': return this.rocksCleared;
+      case 'planer': return this.groundFlat;
+      case 'vinduer': return this.windowsIn;
+      case 'asfalt': return this.asphaltLaid;
       case 'pael': return this.pilesDone;
       case 'grav': return this.holeDug;
       case 'grus': return this.gravelDone;
@@ -381,27 +591,22 @@ class GameState {
   }
 
   /**
-   * Paints the finished building and moves it into the town. The next project starts at
-   * once, so there is always a hole waiting to be dug. Returns the plot it went to.
+   * Paints the finished building and moves it onto its plot in the town. The next project
+   * starts at once, so there is always something waiting on the site. Returns the plot.
    *
-   * A full town starts over with this building as the first in a new one — the finished
-   * town has already had its celebration, and a child should never be told there is no
-   * room for the house they just built.
+   * The town never fills up: after the town's own buildings the road keeps going with houses.
+   * Stars are paid by the scene, from the building's own `stars`.
    */
   paint(color: number): number {
     if (this.stage.id !== 'mal' || !this.hasPaint(color)) return -1;
-    if (this.townFull) this.town = [];
-    this.town.push({ project: this.project, color });
-    this.project++;
+    const plot = this.project;
+    this.town = this.town.filter(b => b.project !== plot);
+    this.town.push({ project: plot, color });
+    this.town.sort((a, b) => a.project - b.project);
+    this.project = this.firstFreePlot();
     this.site = this.freshSite();
     this.save();
-    return this.town.length - 1;
-  }
-
-  /** Clears the town for a fresh one. Machines, stars and the project count stay. */
-  newTown(): void {
-    this.town = [];
-    this.save();
+    return plot;
   }
 
   /**
@@ -435,13 +640,32 @@ class GameState {
   }
 
   /**
-   * Spends stars on a shop item. False if it is unknown, already bought or too dear —
-   * nothing is spent then. Only the balance goes down; `earned`, and with it the rank,
-   * stays where it was.
+   * Whether a shop item can be bought yet: a vehicle once its building stands in the town, an
+   * upgrade once its machine is built and the one before it is bought.
+   */
+  isAvailable(item: ShopItem): boolean {
+    if (item.needs && !this.hasBuilt(item.needs)) return false;
+    const up = item as Upgrade;
+    if (up.machine) {
+      if (!this.isBuilt(up.machine)) return false;
+      if (up.level > 1 && this.level(up.machine) < up.level - 1) return false;
+    }
+    return true;
+  }
+
+  /** What the child could buy right now: for sale, not bought, and enough stars. */
+  get affordable(): ShopItem[] {
+    return SHOP_ITEMS.filter(i => !this.owns(i.id) && this.isAvailable(i) && this.canAfford(i.cost));
+  }
+
+  /**
+   * Spends stars on a shop item. False if it is unknown, already bought, not for sale yet or
+   * too dear — nothing is spent then. Only the balance goes down; `earned`, and with it the
+   * rank, stays where it was.
    */
   buy(id: string): boolean {
     const item = itemById(id);
-    if (!item || this.owns(id) || this.stars < item.cost) return false;
+    if (!item || this.owns(id) || !this.isAvailable(item) || this.stars < item.cost) return false;
     this.stars -= item.cost;
     this.owned.push(id);
     // a new coat of paint goes straight on: that is what the child just paid for
@@ -569,7 +793,7 @@ class GameState {
     } catch {
       data = null;
     }
-    if (!data || (data.version !== 1 && data.version !== SAVE_VERSION)) return;
+    if (!data || (data.version !== 1 && data.version !== 2 && data.version !== SAVE_VERSION)) return;
 
     const num = (v: unknown, fallback: number) => (typeof v === 'number' && isFinite(v) ? v : fallback);
     const clamp01 = (v: unknown) => Math.min(1, Math.max(0, num(v, 0)));
@@ -578,7 +802,8 @@ class GameState {
     this.stars = Math.max(0, num(data.stars, 0));
     // Before the shop, every star earned was a star in hand.
     this.earned = Math.max(this.stars, num(data.earned, this.stars));
-    this.project = count(data.project);
+    const savedProject = count(data.project);
+    this.project = savedProject;
 
     // Each machine is restored field by field, keeping only parts that still exist, so a
     // renamed part cannot leave a machine that is "built" with a piece missing.
@@ -599,7 +824,42 @@ class GameState {
     }
     this.machines = machines;
 
-    const site = data.site ?? {};
+    const savedTown: Building[] = Array.isArray(data.town)
+      ? data.town
+        .filter((b: any) => b && typeof b.project === 'number' && typeof b.color === 'number')
+        .map((b: Building) => ({ project: count(b.project), color: PAINT[b.color] ? b.color : 0 }))
+      : [];
+
+    // Before version 3 the four buildings came round again and again, and a full town of
+    // eight started over. Now every building has its own plot, so an older town is laid out
+    // on the new road: the first four where they belong, counting as built even if a new
+    // town had swept them away, and every house after them further down the road, past the
+    // town's big buildings, which come next.
+    const old = data.version !== SAVE_VERSION;
+    if (old) {
+      const town = new Map<number, Building>();
+      for (const b of savedTown) {
+        const plot = b.project < 4 ? b.project : LANDMARKS + b.project - 4;
+        town.set(plot, { project: plot, color: b.color });
+      }
+      for (let i = 0; i < Math.min(savedProject, 4); i++) {
+        if (town.has(i)) continue;
+        // swept away by a new town: it was built, in the colour its later twin got if any
+        const twin = savedTown.find(b => b.project % 4 === i);
+        town.set(i, { project: i, color: twin?.color ?? i });
+      }
+      this.town = [...town.values()];
+    } else {
+      const town = new Map<number, Building>();
+      for (const b of savedTown) town.set(b.project, b);
+      this.town = [...town.values()];
+    }
+    this.town.sort((a, b) => a.project - b.project);
+    // An old save already past the first four starts afresh on the bus station.
+    const resumes = !old || savedProject < 4;
+    if (!resumes || this.town.some(b => b.project === this.project)) this.project = this.firstFreePlot();
+
+    const site = resumes ? data.site ?? {} : {};
     const stages = this.currentProject.stages;
     let stage = count(site.stage);
     if (data.version === 1) {
@@ -609,24 +869,22 @@ class GameState {
       const same = old === 'rejs' && !stages.includes('rejs') ? 'taarn' : old;
       stage = Math.max(0, stages.indexOf(same));
     }
+    const nums = (v: unknown, f: (n: unknown) => number) => (Array.isArray(v) ? v.map(f) : []);
+    const ints = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter((n): n is number => typeof n === 'number'))] : []);
     this.site = {
       stage: Math.min(stages.length - 1, stage),
       dug: Array.isArray(site.dug) ? site.dug.filter((n: unknown) => typeof n === 'number') : [],
       gravel: count(site.gravel),
-      rolled: Array.isArray(site.rolled) ? site.rolled.map(clamp01) : [],
-      poured: Array.isArray(site.poured) ? site.poured.map(clamp01) : [],
+      rolled: nums(site.rolled, clamp01),
+      poured: nums(site.poured, clamp01),
       placed: count(site.placed),
-      piles: Array.isArray(site.piles)
-        ? site.piles.map((b: unknown) => Math.min(BANGS_PER_PILE, count(b)))
-        : [],
+      piles: nums(site.piles, (b: unknown) => Math.min(BANGS_PER_PILE, count(b))),
+      planed: nums(site.planed, clamp01),
+      rocks: ints(site.rocks),
+      wrecked: count(site.wrecked),
+      paved: nums(site.paved, clamp01),
+      windows: ints(site.windows),
     };
-
-    this.town = Array.isArray(data.town)
-      ? data.town
-        .filter((b: any) => b && typeof b.project === 'number' && typeof b.color === 'number')
-        .map((b: Building) => ({ project: count(b.project), color: PAINT[b.color] ? b.color : 0 }))
-        .slice(0, TOWN_PLOTS)
-      : [];
 
     this.owned = Array.isArray(data.owned)
       ? [...new Set((data.owned as unknown[]).filter((id): id is string => typeof id === 'string' && !!itemById(id)))]

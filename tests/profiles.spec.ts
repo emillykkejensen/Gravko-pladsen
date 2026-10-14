@@ -67,7 +67,7 @@ test('a new player is made on the on-screen keyboard, and their name and animal 
   // Their workshop is their own save, under their own key.
   await game.goTo('AssembleScene', { machine: 'gravko' });
   await game.drag(await game.mustFind('AssembleScene', 'part:baelter'), await game.mustFind('AssembleScene', 'slot:baelter'));
-  await game.expectState(s => s.stars).toBe(1);
+  await game.expectState(s => s.machines.gravko.parts).toEqual(['baelter']);
   expect((await game.storage(saveKeyFor(id)))?.machines.gravko.parts).toEqual(['baelter']);
 
   // Close the game and open it again.

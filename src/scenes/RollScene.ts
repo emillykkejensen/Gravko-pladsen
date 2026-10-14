@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config';
 import { gameState } from '../state/GameState';
-import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
+import { addBackButton, addSceneTitle, addStarCounter } from '../ui/Chrome';
 import { caption } from '../helpers/Draw';
 import { audio } from '../helpers/Audio';
 import { showConfetti, showPraise, showSparkle } from '../objects/FeedbackEffects';
@@ -257,7 +257,6 @@ export class RollScene extends BaseScene {
     audio.horn();
     showConfetti(this, hole.x + hole.w / 2, 240 + this.dy, 36);
     showPraise(this, hole.x + hole.w / 2, 210 + this.dy, 'Gruset er trillet fast!');
-    award(this, 3, hole.x + hole.w / 2, this.gy);
     this.refresh();
   }
 }
