@@ -30,9 +30,13 @@ import { CAPACITY, DEFAULT_LIVERY, LIVERIES, SHOP_ITEMS, ShopItem, UPGRADES, Upg
  * old five-stage list and is translated on load. Version 3 gave every building its own plot
  * on a road that keeps going, and added the town's big buildings after the high-rise; an
  * older save keeps its first four buildings on their plots and its later houses further down
+ * the road. Version 4 put ordinary buildings between the big ones, which moved them along
  * the road. Anything else starts fresh.
  */
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
+
+/** Where version 3's big buildings (its plots 4-8) stand on version 4's road. */
+const V3_BIG = [4, 7, 10, 13, 16];
 
 export interface MachineState {
   /** Parts snapped into place, in the order they went on. */
@@ -793,7 +797,7 @@ class GameState {
     } catch {
       data = null;
     }
-    if (!data || (data.version !== 1 && data.version !== 2 && data.version !== SAVE_VERSION)) return;
+    if (!data || ![1, 2, 3, SAVE_VERSION].includes(data.version)) return;
 
     const num = (v: unknown, fallback: number) => (typeof v === 'number' && isFinite(v) ? v : fallback);
     const clamp01 = (v: unknown) => Math.min(1, Math.max(0, num(v, 0)));
@@ -835,8 +839,17 @@ class GameState {
     // on the new road: the first four where they belong, counting as built even if a new
     // town had swept them away, and every house after them further down the road, past the
     // town's big buildings, which come next.
-    const old = data.version !== SAVE_VERSION;
-    if (old) {
+    const old = data.version === 1 || data.version === 2;
+    // Version 3 had the big buildings straight after one another; version 4 put ordinary
+    // buildings between them. The same building moves to its new plot, and a house after the
+    // hospital to the same place in the houses after the new hospital.
+    const v3plot = (j: number) => (j < 4 ? j : j <= 8 ? V3_BIG[j - 4] : LANDMARKS + j - 9);
+    if (data.version === 3) {
+      this.project = v3plot(savedProject);
+      const town = new Map<number, Building>();
+      for (const b of savedTown) town.set(v3plot(b.project), { project: v3plot(b.project), color: b.color });
+      this.town = [...town.values()];
+    } else if (old) {
       const town = new Map<number, Building>();
       for (const b of savedTown) {
         const plot = b.project < 4 ? b.project : LANDMARKS + b.project - 4;
@@ -855,8 +868,9 @@ class GameState {
       this.town = [...town.values()];
     }
     this.town.sort((a, b) => a.project - b.project);
-    // An old save already past the first four starts afresh on the bus station.
-    const resumes = !old || savedProject < 4;
+    // An old save already past the first four starts afresh on the bus station, and a
+    // version 3 one on a house after the hospital, whose jobs have changed, starts it afresh.
+    const resumes = old ? savedProject < 4 : data.version !== 3 || savedProject <= 8;
     if (!resumes || this.town.some(b => b.project === this.project)) this.project = this.firstFreePlot();
 
     const site = resumes ? data.site ?? {} : {};

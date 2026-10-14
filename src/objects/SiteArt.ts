@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_HEIGHT, LINE, PAINT } from '../config';
 import { addBirds, drawCloud, drawSun, drawTree, gradientBand, shade } from '../helpers/Draw';
-import type { ProjectDef } from '../state/Projects';
+import { ProjectDef, doorXs, isDoorSlot } from '../state/Projects';
 
 /**
  * Scenery shared by the building-site screens: the sky, the ground in cross-section, the
@@ -366,9 +366,28 @@ export function drawBuilding(g: Phaser.GameObjects.Graphics, p: ProjectDef, pain
     if (f === 0 && (kind === 'brandstation' || kind === 'busstation')) continue;
     for (let i = 0; i < perFloor; i++) {
       const wx = x + ((i + 0.5) * w) / perFloor - 10;
-      if (f === 0 && Math.abs(wx + 10) < 18) continue;
+      if (f === 0 && isDoorSlot(p, i)) continue;
       drawWindow(g, wx, fy + 12, kind === 'togstation' && f === 0);
+      // a little balcony under each window of the apartment block, above the ground floor
+      if (kind === 'boligblok' && f > 0) {
+        g.fillStyle(COLORS.white, 0.85);
+        g.fillRect(wx - 4, fy + 30, 28, 9);
+        g.lineStyle(LINE.thin, COLORS.outline, 1);
+        g.strokeRect(wx - 4, fy + 30, 28, 9);
+        g.lineBetween(wx + 3, fy + 30, wx + 3, fy + 39);
+        g.lineBetween(wx + 10, fy + 30, wx + 10, fy + 39);
+        g.lineBetween(wx + 17, fy + 30, wx + 17, fy + 39);
+      }
     }
+  }
+
+  // the terraced houses: a line between each home, and a shade of difference in each
+  if (kind === 'raekkehus') {
+    g.fillStyle(COLORS.white, 0.12);
+    g.fillRect(x + w / 3, -wallH, w / 3, wallH);
+    g.lineStyle(LINE.thin, COLORS.outline, 1);
+    g.lineBetween(x + w / 3, -wallH, x + w / 3, 0);
+    g.lineBetween(x + (2 * w) / 3, -wallH, x + (2 * w) / 3, 0);
   }
 
   if (kind === 'brandstation') {
@@ -392,14 +411,16 @@ export function drawBuilding(g: Phaser.GameObjects.Graphics, p: ProjectDef, pain
     g.fillTriangle(x + 10, -36, x + 40, -36, x + 10, -14);
   }
 
-  // door
+  // door, or one for each home
   if (kind !== 'brandstation') {
-    g.fillStyle(kind === 'busstation' ? COLORS.glassLight : COLORS.woodDeep);
-    g.fillRoundedRect(-11, -34, 22, 34, { tl: 8, tr: 8, bl: 0, br: 0 });
-    g.lineStyle(LINE.thin, COLORS.outline, 1);
-    g.strokeRoundedRect(-11, -34, 22, 34, { tl: 8, tr: 8, bl: 0, br: 0 });
-    g.fillStyle(COLORS.sun);
-    g.fillCircle(6, -16, 2.2);
+    for (const dx of doorXs(p)) {
+      g.fillStyle(kind === 'busstation' ? COLORS.glassLight : COLORS.woodDeep);
+      g.fillRoundedRect(dx - 11, -34, 22, 34, { tl: 8, tr: 8, bl: 0, br: 0 });
+      g.lineStyle(LINE.thin, COLORS.outline, 1);
+      g.strokeRoundedRect(dx - 11, -34, 22, 34, { tl: 8, tr: 8, bl: 0, br: 0 });
+      g.fillStyle(COLORS.sun);
+      g.fillCircle(dx + 6, -16, 2.2);
+    }
   } else {
     g.fillStyle(COLORS.woodDeep);
     g.fillRect(-9, -30, 18, 30);
@@ -455,10 +476,16 @@ export function drawBuilding(g: Phaser.GameObjects.Graphics, p: ProjectDef, pain
       g.lineBetween(0, cy, 0, cy - 9);
       g.lineBetween(0, cy, 6, cy + 2);
     } else {
-      // chimney
+      // a chimney, or one for each home
       g.fillStyle(COLORS.roofDeep);
-      g.fillRect(x + w * 0.68, -wallH - rh * 0.75, 12, rh * 0.4);
-      g.strokeRect(x + w * 0.68, -wallH - rh * 0.75, 12, rh * 0.4);
+      const chimneys = kind === 'raekkehus' ? [0.16, 0.5, 0.84] : [0.68];
+      for (const at of chimneys) {
+        // up from wherever the roof slope is under it
+        const cx = x + w * at;
+        const slope = rh * (1 - Math.abs(cx + 6) / (w / 2 + 12));
+        g.fillRect(cx, -wallH - slope - 6, 12, Math.max(10, slope * 0.4) + 6);
+        g.strokeRect(cx, -wallH - slope - 6, 12, Math.max(10, slope * 0.4) + 6);
+      }
     }
   } else {
     const over = kind === 'busstation' ? 34 : 6;

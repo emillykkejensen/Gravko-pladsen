@@ -51,7 +51,10 @@ export function townBehind(scene: Phaser.Scene, add: Add, t: TownLayout): void {
     }
   }
   if (owns('statue')) {
-    add(statue(scene, t.width * 0.5, t.plotY - 70, true));
+    // in the gap between the second and third plots, which the trees leave free
+    const gap = t.plotXs.length > 2 ? t.plotXs[2] - t.plotXs[1] : 150;
+    const x = t.plotXs.length > 2 ? t.plotXs[1] + gap / 2 : t.width / 2;
+    add(statue(scene, x, t.plotY - 84, true));
   }
 }
 
@@ -466,11 +469,18 @@ function statue(scene: Phaser.Scene, x: number, base: number, onHill: boolean): 
   const c = scene.add.container(x, base);
   const g = scene.add.graphics();
   if (onHill) {
-    // its own hill, rising behind the houses, so it stands up above the roofs
+    // Its own hill, rising behind the houses, so it stands up above the roofs. A dome whose
+    // foot is the town's grass line: the road is drawn under the town now, not over it, so
+    // a whole ellipse would show its lower half as a green circle across the road.
+    const foot = 82;
+    const dome = Array.from({ length: 25 }, (_, i) => {
+      const a = (i / 24) * Math.PI;
+      return { x: -Math.cos(a) * 92, y: foot - Math.pow(Math.sin(a), 0.7) * (foot + 4) };
+    });
     g.fillStyle(shade(COLORS.grass, 0.08));
-    g.fillEllipse(0, 80, 300, 164);
+    g.fillPoints(dome, true);
     g.lineStyle(LINE.thin, COLORS.outline, 0.25);
-    g.strokeEllipse(0, 80, 300, 164);
+    g.strokePoints(dome, false);
   }
   plate(g, -30, -18, 60, 22, 5, COLORS.stone, 1, LINE.base);
   g.fillStyle(COLORS.stoneDeep, 0.5);

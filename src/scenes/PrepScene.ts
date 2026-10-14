@@ -1,14 +1,15 @@
 import Phaser from 'phaser';
-import { COLORS, INK, LINE, SIZE, text } from '../config';
+import { COLORS, INK, INK_SOFT, LINE, SIZE, text } from '../config';
 import { gameState } from '../state/GameState';
 import { EXTRA_SPOTS, ExtraKind, MACHINES, MachineId } from '../state/Machines';
+import { upgradeFor } from '../state/Shop';
 import { addBackButton, addSceneTitle, addStarCounter } from '../ui/Chrome';
 import { button, plate, progressBar, shade, shadow, sheen, tappable } from '../helpers/Draw';
 import { dur, popIn, reduceMotion } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
 import { nextRoute } from '../helpers/Route';
 import {
-  showCheckmark, showConfetti, showPraise, showSparkle, showSplash, showToast,
+  showCheckmark, showConfetti, showPraise, showRing, showSparkle, showSplash, showToast,
 } from '../objects/FeedbackEffects';
 import { SERVICE, drawMachine, machineBounds } from '../objects/MachineArt';
 import { drawFlag } from '../objects/TownArt';
@@ -115,7 +116,77 @@ export class PrepScene extends BaseScene {
     this.buildTools();
 
     if (gameState.isReady(this.machine)) this.buildGo();
+    this.buildUpgrade();
     this.buildPointer(zone);
+  }
+
+  /* --------------------------------------------------------------- upgrade --- */
+
+  /** Where the upgrade plate hangs: over the pump, out of the way of the machine. */
+  private get upgradeAt() {
+    return { x: 132 + this.dx, y: 172 + this.dy };
+  }
+
+  /**
+   * The machine's next upgrade, to buy right here while it is being filled up — the same as
+   * on the star shop's upgrade shelf, without the trip there. Once it has both, the plate
+   * just says so.
+   */
+  private buildUpgrade(): void {
+    const level = gameState.level(this.machine);
+    const next = level < 2 ? upgradeFor(this.machine, level + 1) : null;
+    const { x, y } = this.upgradeAt;
+    const w = 228;
+    const h = 62;
+    const c = this.dyn(this.add.container(x, y)).setName('upgrade');
+    const g = this.add.graphics();
+    shadow(g, -w / 2, -h / 2, w, h, 16, 3, 0.16);
+    plate(g, -w / 2, -h / 2, w, h, 16, COLORS.cream, 1, 2.5);
+    c.add(g);
+
+    // the stars it has, one per upgrade bought
+    for (let i = 0; i < 2; i++) {
+      c.add(this.add.star(-w / 2 + 22, -h / 2 + 18 + i * 26, 5, 5, 10, i < level ? COLORS.sun : COLORS.stone)
+        .setStrokeStyle(1.5, COLORS.outline, i < level ? 1 : 0.4));
+    }
+
+    if (!next) {
+      c.add(this.add.text(14, 0, 'Fuldt opgraderet!', text(SIZE.body, INK, 'bold')).setOrigin(0.5));
+      return;
+    }
+
+    const affordable = gameState.canAfford(next.cost);
+    const title = this.add.text(-w / 2 + 44, -12, `Opgrader: ${next.name}`, text(SIZE.label, INK, 'bold')).setOrigin(0, 0.5);
+    if (title.width > w - 60) title.setScale((w - 60) / title.width);
+    c.add(title);
+    c.add(this.add.text(-w / 2 + 44, 13, next.level === 1 ? 'Gør dobbelt så meget' : 'Gør fire gange så meget',
+      text(SIZE.tiny, INK_SOFT, 'bold')).setOrigin(0, 0.5));
+
+    // the price, as a button
+    const tag = this.add.container(w / 2 - 34, 13);
+    const tg = this.add.graphics();
+    plate(tg, -30, -13, 60, 26, 13, affordable ? COLORS.sun : COLORS.stone, 1, LINE.thin);
+    tag.add(tg);
+    tag.add(this.add.star(-14, 0, 5, 4, 8.5, affordable ? COLORS.white : COLORS.stoneDeep).setStrokeStyle(1, COLORS.outline, 0.6));
+    tag.add(this.add.text(9, 0, `${next.cost}`, text(SIZE.body, affordable ? INK : INK_SOFT, 'bold')).setOrigin(0.5));
+    c.add(tag);
+    if (!affordable) c.setAlpha(0.85);
+
+    tappable(this, c, w, h, () => {
+      if (!gameState.buy(next.id)) {
+        const short = next.cost - gameState.stars;
+        audio.denied();
+        showToast(this, x, y + 50, `Du mangler ${short} ${short === 1 ? 'stjerne' : 'stjerner'}`, '#B9584A');
+        return;
+      }
+      audio.purchase();
+      this.events.emit('starsChanged', gameState.stars);
+      const mid = this.at({ x: 0, y: -80 });
+      showSparkle(this, mid.x, mid.y, 260, 160);
+      showRing(this, x, y, COLORS.sun);
+      showToast(this, mid.x, mid.y - 90, `${next.name}!`, '#4A7F33');
+      this.refresh();
+    }, 'tap');
   }
 
   /* --------------------------------------------------------------- guidance --- */

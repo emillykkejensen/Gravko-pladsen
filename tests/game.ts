@@ -102,7 +102,7 @@ export class Game {
   /** A whole save in the current format, with `patch` laid over a new game. */
   static saveWith(patch: Record<string, unknown>): Record<string, unknown> {
     return {
-      version: 3,
+      version: 4,
       stars: 0,
       machines: Object.fromEntries(MACHINE_IDS.map(id => [id, emptyMachine()])),
       project: 0,

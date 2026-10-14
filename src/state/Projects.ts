@@ -68,7 +68,8 @@ export type RoofKind = 'saddel' | 'flad';
 
 /** What a building looks like once it is finished. */
 export type BuildingKind =
-  | 'hus' | 'villa' | 'butik' | 'hoejhus' | 'busstation' | 'brandstation' | 'politi' | 'togstation' | 'hospital';
+  | 'hus' | 'villa' | 'butik' | 'hoejhus' | 'raekkehus' | 'boligblok'
+  | 'busstation' | 'brandstation' | 'politi' | 'togstation' | 'hospital';
 
 export interface ProjectDef {
   /** Its plot on the road, and which shop things it opens: the same as its index. */
@@ -119,45 +120,81 @@ const withStages = (...extra: StageId[]): StageId[] => {
   return STAGE_ORDER.filter(s => all.has(s));
 };
 
-/** The town's own buildings, each on its own plot, in the order they are built. */
+/** The ordinary buildings' shapes, which the town's road is mostly made of. */
+const SHAPES = {
+  hus: { holeCols: 4, holeRows: 2, gravelLoads: 1, pourCells: 4, floors: 1, roof: 'saddel', piles: 0 },
+  villa: { holeCols: 5, holeRows: 2, gravelLoads: 2, pourCells: 5, floors: 2, roof: 'saddel', piles: 0 },
+  butik: { holeCols: 6, holeRows: 2, gravelLoads: 2, pourCells: 6, floors: 1, roof: 'flad', piles: 3 },
+  hoejhus: { holeCols: 5, holeRows: 3, gravelLoads: 2, pourCells: 5, floors: 4, roof: 'flad', piles: 4 },
+  raekkehus: { holeCols: 6, holeRows: 2, gravelLoads: 2, pourCells: 6, floors: 2, roof: 'saddel', piles: 0 },
+  boligblok: { holeCols: 5, holeRows: 2, gravelLoads: 2, pourCells: 5, floors: 3, roof: 'flad', piles: 3 },
+} as const;
+
+/** What a borrowed job needs, for an ordinary building that has not got it from its own shape. */
+const BORROWED_SIZE: Pick<ProjectDef, 'mounds' | 'rocks' | 'shed' | 'asphalt'> = {
+  mounds: 3, rocks: 4, shed: 6, asphalt: 4,
+};
+
+/** The core stages for a shape of its own: piles and rolling for the bigger ones. */
+const shapeStages = (kind: keyof typeof SHAPES, ...extra: StageId[]): StageId[] => {
+  const own: StageId[] = kind === 'hus' ? [] : kind === 'villa' || kind === 'raekkehus' ? ['tromle'] : ['pael', 'tromle'];
+  return withStages(...own, ...extra, ...(kind === 'hoejhus' ? ['taarn' as StageId] : []));
+};
+
+/** An ordinary building between the big ones, borrowing a big building's job it follows. */
+const ordinary = (
+  index: number, kind: keyof typeof SHAPES, name: string, definite: string, stars: number, ...extra: StageId[]
+): ProjectDef => def(index, shapeStages(kind, ...extra), {
+  id: `${kind}-${index}`, kind, name, definite, stars, ...SHAPES[kind], ...BORROWED_SIZE,
+});
+
+/**
+ * The town's own buildings, each on its own plot, in the order they are built: the first
+ * four, then each big building with two ordinary ones after it, which take turns with the
+ * jobs the big buildings have brought so far.
+ */
 export const PROJECTS: ProjectDef[] = [
   def(0, withStages(), {
-    id: 'hus', kind: 'hus', name: 'Det lille hus', definite: 'det lille hus', stars: 5,
-    holeCols: 4, holeRows: 2, gravelLoads: 1, pourCells: 4, floors: 1, roof: 'saddel', piles: 0,
+    id: 'hus', kind: 'hus', name: 'Det lille hus', definite: 'det lille hus', stars: 5, ...SHAPES.hus,
   }),
   def(1, withStages('tromle'), {
-    id: 'villa', kind: 'villa', name: 'Villaen', definite: 'villaen', stars: 6,
-    holeCols: 5, holeRows: 2, gravelLoads: 2, pourCells: 5, floors: 2, roof: 'saddel', piles: 0,
+    id: 'villa', kind: 'villa', name: 'Villaen', definite: 'villaen', stars: 6, ...SHAPES.villa,
   }),
   def(2, withStages('pael', 'tromle'), {
-    id: 'butik', kind: 'butik', name: 'Butikken', definite: 'butikken', stars: 8,
-    holeCols: 6, holeRows: 2, gravelLoads: 2, pourCells: 6, floors: 1, roof: 'flad', piles: 3,
+    id: 'butik', kind: 'butik', name: 'Butikken', definite: 'butikken', stars: 8, ...SHAPES.butik,
   }),
   def(3, withStages('pael', 'tromle', 'taarn'), {
-    id: 'hoejhus', kind: 'hoejhus', name: 'Højhuset', definite: 'højhuset', stars: 10,
-    holeCols: 5, holeRows: 3, gravelLoads: 2, pourCells: 5, floors: 4, roof: 'flad', piles: 4,
+    id: 'hoejhus', kind: 'hoejhus', name: 'Højhuset', definite: 'højhuset', stars: 10, ...SHAPES.hoejhus,
   }),
   def(4, withStages('planer', 'pael', 'tromle'), {
     id: 'busstation', kind: 'busstation', name: 'Busstationen', definite: 'busstationen', stars: 10,
     holeCols: 6, holeRows: 2, gravelLoads: 2, pourCells: 6, floors: 1, roof: 'flad', piles: 3,
     mounds: 3,
   }),
-  def(5, withStages('sten', 'planer', 'pael', 'tromle'), {
+  ordinary(5, 'raekkehus', 'Rækkehusene', 'rækkehusene', 7, 'planer'),
+  ordinary(6, 'hus', 'Det gule hus', 'det gule hus', 6, 'planer'),
+  def(7, withStages('sten', 'planer', 'pael', 'tromle'), {
     id: 'brandstation', kind: 'brandstation', name: 'Brandstationen', definite: 'brandstationen', stars: 12,
     holeCols: 6, holeRows: 2, gravelLoads: 2, pourCells: 6, floors: 2, roof: 'flad', piles: 3,
     mounds: 3, rocks: 4,
   }),
-  def(6, withStages('riv', 'sten', 'planer', 'pael', 'tromle'), {
+  ordinary(8, 'boligblok', 'Boligblokken', 'boligblokken', 8, 'sten'),
+  ordinary(9, 'butik', 'Kiosken', 'kiosken', 7, 'planer'),
+  def(10, withStages('riv', 'sten', 'planer', 'pael', 'tromle'), {
     id: 'politi', kind: 'politi', name: 'Politistationen', definite: 'politistationen', stars: 12,
     holeCols: 5, holeRows: 2, gravelLoads: 2, pourCells: 5, floors: 2, roof: 'flad', piles: 3,
     mounds: 3, rocks: 4, shed: 6,
   }),
-  def(7, withStages('riv', 'sten', 'planer', 'pael', 'tromle', 'asfalt'), {
+  ordinary(11, 'villa', 'Den store villa', 'den store villa', 7, 'riv'),
+  ordinary(12, 'raekkehus', 'De nye rækkehuse', 'de nye rækkehuse', 8, 'sten'),
+  def(13, withStages('riv', 'sten', 'planer', 'pael', 'tromle', 'asfalt'), {
     id: 'togstation', kind: 'togstation', name: 'Togstationen', definite: 'togstationen', stars: 14,
     holeCols: 6, holeRows: 2, gravelLoads: 2, pourCells: 6, floors: 2, roof: 'saddel', piles: 4,
     mounds: 4, rocks: 5, shed: 6, asphalt: 5,
   }),
-  def(8, withStages('riv', 'sten', 'planer', 'pael', 'tromle', 'taarn', 'vinduer', 'asfalt'), {
+  ordinary(14, 'boligblok', 'Den høje blok', 'den høje blok', 9, 'asfalt'),
+  ordinary(15, 'hus', 'Huset ved stationen', 'huset ved stationen', 6, 'riv'),
+  def(16, withStages('riv', 'sten', 'planer', 'pael', 'tromle', 'taarn', 'vinduer', 'asfalt'), {
     id: 'hospital', kind: 'hospital', name: 'Hospitalet', definite: 'hospitalet', stars: 15,
     holeCols: 6, holeRows: 3, gravelLoads: 3, pourCells: 6, floors: 4, roof: 'flad', piles: 4,
     mounds: 4, rocks: 5, shed: 9, asphalt: 5,
@@ -167,17 +204,20 @@ export const PROJECTS: ProjectDef[] = [
 /** The big buildings' jobs, which the houses after the hospital take turns to borrow. */
 const BORROWED: StageId[] = ['planer', 'sten', 'riv', 'asfalt', 'vinduer'];
 
-/** What a borrowed job needs, for a house that has not got it from its own shape. */
-const BORROWED_SIZE: Pick<ProjectDef, 'mounds' | 'rocks' | 'shed' | 'asphalt'> = {
-  mounds: 3, rocks: 4, shed: 6, asphalt: 4,
+/** The shapes the houses after the hospital take turns with. */
+const AFTER: (keyof typeof SHAPES)[] = ['hus', 'villa', 'butik', 'hoejhus', 'raekkehus', 'boligblok'];
+
+const AFTER_NAMES: Record<keyof typeof SHAPES, string> = {
+  hus: 'Det lille hus', villa: 'Villaen', butik: 'Butikken', hoejhus: 'Højhuset',
+  raekkehus: 'Rækkehusene', boligblok: 'Boligblokken',
 };
 
 const cache = new Map<number, ProjectDef>();
 
 /**
- * The building on plot `index`. The first nine are the town's own; after them the road keeps
- * going with the four houses in turn, each also borrowing one of the big buildings' jobs, so
- * every machine keeps getting work.
+ * The building on plot `index`. The first ones are the town's own; after them the road keeps
+ * going with the ordinary shapes in turn, each also borrowing one of the big buildings' jobs,
+ * so every machine keeps getting work.
  */
 export function projectAt(index: number): ProjectDef {
   const i = Math.max(0, Math.floor(index));
@@ -185,15 +225,10 @@ export function projectAt(index: number): ProjectDef {
   const hit = cache.get(i);
   if (hit) return hit;
   const k = i - PROJECTS.length;
-  const base = PROJECTS[k % 4];
+  const kind = AFTER[k % AFTER.length];
   const borrowed = BORROWED[k % BORROWED.length];
-  const p: ProjectDef = {
-    ...base,
-    ...BORROWED_SIZE,
-    index: i,
-    stars: 8,
-    stages: STAGE_ORDER.filter(s => s === borrowed || base.stages.includes(s)),
-  };
+  const name = AFTER_NAMES[kind];
+  const p = ordinary(i, kind, name, name.charAt(0).toLowerCase() + name.slice(1), 8, borrowed);
   cache.set(i, p);
   return p;
 }
@@ -255,12 +290,18 @@ export function windowsPerFloor(p: ProjectDef): number {
   return Math.max(2, Math.round((p.pourCells * 40) / 50));
 }
 
-/** Whether a ground-floor window slot is where the door goes. */
+/** Where the front doors are, from the building's middle: one each for the terraced houses. */
+export function doorXs(p: ProjectDef): number[] {
+  const w = p.pourCells * 40;
+  return p.kind === 'raekkehus' ? [-w / 3, 0, w / 3] : [0];
+}
+
+/** Whether a ground-floor window slot is where a door goes. */
 export function isDoorSlot(p: ProjectDef, slot: number): boolean {
   const per = windowsPerFloor(p);
   const w = p.pourCells * 40;
   const wx = -w / 2 + ((slot + 0.5) * w) / per - 10;
-  return Math.abs(wx + 10) < 18;
+  return doorXs(p).some(d => Math.abs(wx + 10 - d) < 22);
 }
 
 /** Bangs of the pile driver's hammer it takes to get one pile all the way down. */

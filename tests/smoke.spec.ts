@@ -44,18 +44,18 @@ const SCREENS: [string, Record<string, unknown>, object?][] = [
   ['RollScene', readySave({ stage: 2, gravel: 2, rolled: [1, 0.5] }, { project: 1 })],
   ['CraneScene', readySave({ stage: 5, placed: 3 }, { project: 3 })],
   ['CraneScene', readySave({ stage: 6, placed: 5 }, { project: 3 })],
-  ['WreckScene', readySave({ stage: 0, wrecked: 2 }, { project: 6, town: townOf(6) })],
-  ['RockScene', readySave({ stage: 1, rocks: [0] }, { project: 6, town: townOf(6) })],
-  ['PlanerScene', readySave({ stage: 2, planed: [1, 0.5] }, { project: 6, town: townOf(6) })],
-  ['WindowScene', readySave({ stage: 9, placed: 5, windows: [0, 3] }, { project: 8, town: townOf(8) })],
-  ['AsphaltScene', readySave({ stage: 10, paved: [1, 0.3] }, { project: 8, town: townOf(8) })],
-  ['CraneScene', readySave({ stage: 11, placed: 5 }, { project: 8, town: townOf(8) })],
+  ['WreckScene', readySave({ stage: 0, wrecked: 2 }, { project: 10, town: townOf(10) })],
+  ['RockScene', readySave({ stage: 1, rocks: [0] }, { project: 10, town: townOf(10) })],
+  ['PlanerScene', readySave({ stage: 2, planed: [1, 0.5] }, { project: 10, town: townOf(10) })],
+  ['WindowScene', readySave({ stage: 9, placed: 5, windows: [0, 3] }, { project: 16, town: townOf(16) })],
+  ['AsphaltScene', readySave({ stage: 10, paved: [1, 0.3] }, { project: 16, town: townOf(16) })],
+  ['CraneScene', readySave({ stage: 11, placed: 5 }, { project: 16, town: townOf(16) })],
   ['TownScene', readySave({ stage: 4 }, {
-    project: 14, town: townOf(14),
+    project: 20, town: townOf(20),
     owned: ['bus', 'brandbil', 'politibil', 'tog', 'ambulance', 'helikopter', 'lygter', 'traer', 'flag', 'statue'],
   })],
   ['ShopScene', { stars: 40, town: townOf(5), machines: { gravko: readySave().machines.gravko } }],
-  ['GarageScene', readySave({}, { project: 9, town: townOf(9) })],
+  ['GarageScene', readySave({}, { project: 17, town: townOf(17) })],
 ];
 
 SCREENS.forEach(([scene, save, data], i) => {

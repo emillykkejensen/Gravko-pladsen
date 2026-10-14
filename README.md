@@ -52,11 +52,20 @@ bigger buildings add stages of their own:
 | *Togstationen* (station clock) | … adds *læg asfalt* after the frame | Asfaltmaskinen | 14 |
 | *Hospitalet* (red cross, helipad, four storeys) | … adds *sæt vinduerne i*, and the tower crane | Liftbilen | 15 |
 
+Between the big buildings stand ordinary ones, two after each, so the road is a street
+and not a row of landmarks: *Rækkehusene* and *Det gule hus* after the bus station,
+*Boligblokken* and *Kiosken* after the fire station, *Den store villa* and *De nye
+rækkehuse* after the police station, *Den høje blok* and *Huset ved stationen* after the
+railway station — seventeen buildings up to the hospital. Each takes a house shape (the
+four first ones, the terraced houses with a door and a chimney for each home, or the
+apartment block with balconies) and borrows one of the jobs the big buildings have brought
+so far, and is worth 6–9 stars.
+
 So each bigger building starts with a trip to the workshop to build something new, and a new
-job stays on for every building after it: the hospital uses all twelve machines. After the
-hospital the road keeps going with houses — the first four shapes in turn, worth 8 stars
-each — and each one borrows one of the big buildings' jobs, so every machine keeps getting
-work. The stage lists are data (`stages` on each project in `state/Projects.ts`, and
+job stays on for every big building after it: the hospital uses all twelve machines. After
+the hospital the road keeps going with ordinary buildings — the six shapes in turn, worth 8
+stars each — and each one borrows one of the big buildings' jobs, so every machine keeps
+getting work. The stage lists are data (`stages` on each project in `state/Projects.ts`, and
 `projectAt()` for the houses after the hospital); a scene only plays one stage, and
 `GameState.stage` is whatever the current building's list says is next.
 
@@ -175,7 +184,9 @@ or 4, and each job uses it:
 | Nedrivningskran | Tung kugle, Kæmpekugle | each swing knocks 2, then 4 blocks down |
 | Liftbil | Stor kurv, Kæmpekurv | each window put in brings the 1, then 3 beside it on the same floor |
 
-The workshop shows a little star by a machine's name for each upgrade it has.
+An upgrade can also be bought right in the workshop, while the machine is being filled up:
+the plate over the diesel pump shows its next upgrade and price, and a tap buys it. The
+workshop shows a little star by a machine's name for each upgrade it has.
 
 Every town decoration has a place no other one uses — the sky, the hills behind the houses,
 the road, the gaps on the pavement — so buying all of them never stacks one on another and
@@ -185,8 +196,8 @@ livery with `inLivery()` and the site's machines change the moment it is bought.
 
 Spending never costs a rank. `GameState` keeps two counts — `stars`, the balance, and
 `earned`, every star ever earned — and the rank ladder (*Lærling* → *Byens helt*) reads
-`earned`; its steps are set so the first house makes a *Hjælper* and the town's own nine
-buildings a *Mesterbygger*. Nothing bought can be lost, and "Start forfra" is the only thing
+`earned`; its steps are set so the first house makes a *Hjælper* and the hospital, the
+last of the town's own buildings, a *Byens helt*. Nothing bought can be lost, and "Start forfra" is the only thing
 that clears it.
 
 ### Buttons away from the bottom edge
@@ -419,7 +430,14 @@ A building's `project` is now its plot. An older save's town is laid out on the 
 the first four buildings on their own plots — counted as built even if a full town had swept
 them away — and every later house past the hospital, in the same shapes and colours. A save
 that was past the first four starts on the bus station; one that was not carries on where it
-was. A save from any other version starts fresh rather than half-loading.
+was.
+
+Version 4 put ordinary buildings between the big ones, so the bus station, fire station,
+police station, railway station and hospital moved from plots 4–8 to 4, 7, 10, 13 and 16,
+and the houses after the hospital moved along with them. A version 3 save finds every
+building it has on its new plot and carries on with the building it was on; the new plots
+in between are simply empty, waiting. A save from any other version starts fresh rather than
+half-loading.
 
 Tank filling is called every frame while the nozzle is held, so it does not write the save
 itself except on the frame the tank becomes full; the scene saves when the nozzle is let go.

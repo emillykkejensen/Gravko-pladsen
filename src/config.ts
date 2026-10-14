@@ -197,7 +197,8 @@ export const DEPTH = {
  * Builder ranks. A read-out of effort, not a gate — nothing to unlock, nothing to fail,
  * no way to go backwards. They count every star ever earned, so spending stars in the shop
  * never takes a rank away. Stars come only from finished buildings, so the steps are set by
- * them: the first house makes a Hjælper, and the town's own nine buildings a Mesterbygger.
+ * them: the first house makes a Hjælper, and the hospital, the last of the town's own
+ * buildings, a Byens helt.
  */
 export const RANKS = [
   { at: 0, name: 'Lærling' },
