@@ -139,3 +139,25 @@ test('the paver lays the asphalt, strip by strip', async ({ page }) => {
   expect((await game.state()).site.paved).toEqual([1, 1, 1, 1, 1]);
   game.expectNoErrors();
 });
+
+test('the heaviest wrecking ball, drawn bigger, still swings into the shed and knocks four down', async ({ page }) => {
+  const game = await Game.openWithSave(page, { ...at(10, 0), owned: ['op-nedriv-1', 'op-nedriv-2'] });
+  await game.goTo('WreckScene');
+  const tip = await game.sceneField<{ x: number; y: number }>('WreckScene', 'tip');
+  const ball = await game.sceneCall<{ x: number; y: number }>('WreckScene', 'ball');
+  await game.drag(ball, { x: tip.x - 150, y: tip.y + 80 }, 10);
+  await game.expectState(s => s.site.wrecked, 'one swing, four blocks').toBe(4);
+  game.expectNoErrors();
+});
+
+test('a bigger bucket, drawn bigger, digs where the finger puts it', async ({ page }) => {
+  const game = await Game.openWithSave(page, { ...readySave({ stage: 0 }), owned: ['op-gravko-1', 'op-gravko-2'] });
+  await game.goTo('DigScene');
+  // the first column, from straight above, as in the plain bucket's test
+  await game.down(342 + 18, GROUND_Y - 90);
+  await page.waitForTimeout(800);
+  await game.moveTo(342 + 18, GROUND_Y + 16, 10);
+  await game.expectState(s => s.site.dug.length, 'four chunks in one bucketful').toBe(4);
+  await game.up();
+  game.expectNoErrors();
+});

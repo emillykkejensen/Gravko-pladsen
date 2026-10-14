@@ -7,7 +7,7 @@ import {
 import { MACHINE_IDS, MACHINES } from '../state/Machines';
 import { PROJECTS, projectById } from '../state/Projects';
 import { showSparkle, showToast } from '../objects/FeedbackEffects';
-import { drawMachine, inLivery, machineBounds } from '../objects/MachineArt';
+import { atLevel, drawMachine, inLivery, machineBounds } from '../objects/MachineArt';
 import { drawBuilding } from '../objects/SiteArt';
 import { decorationPreview } from '../objects/TownArt';
 import { addBackButton, addSceneTitle, addStarCounter } from '../ui/Chrome';
@@ -268,7 +268,8 @@ export class ShopScene extends BaseScene {
       const W = 130;
       const H = 96;
       g.setPosition(W / 2 - (b.x + b.w / 2) * scale, H - 6).setScale(scale);
-      drawMachine(g, up.machine);
+      // drawn with the upgrade on, so the card shows what it buys
+      atLevel(up.machine, up.level, () => drawMachine(g, up.machine));
       const rt = this.add.renderTexture(0, 40 - H + 6, W, H).setOrigin(0.5, 0);
       rt.draw(g);
       g.destroy();
