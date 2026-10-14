@@ -21,10 +21,11 @@ test('the stages of the big buildings, in order', async ({ page }) => {
     return s.stages.map((st: { id: string }) => st.id);
   }, p);
   expect(await stages(4)).toEqual(['planer', 'pael', 'grav', 'grus', 'tromle', 'stoeb', 'rejs', 'mal']);
-  expect(await stages(5)).toEqual(['sten', 'planer', 'pael', 'grav', 'grus', 'tromle', 'stoeb', 'rejs', 'mal']);
-  expect(await stages(6)).toEqual(['riv', 'sten', 'planer', 'pael', 'grav', 'grus', 'tromle', 'stoeb', 'rejs', 'mal']);
-  expect(await stages(7)).toEqual(['riv', 'sten', 'planer', 'pael', 'grav', 'grus', 'tromle', 'stoeb', 'rejs', 'asfalt', 'mal']);
-  expect(await stages(8)).toEqual([
+  expect(await stages(5), 'the terraced houses between, borrowing the bulldozer').toEqual(['planer', 'grav', 'grus', 'tromle', 'stoeb', 'rejs', 'mal']);
+  expect(await stages(7)).toEqual(['sten', 'planer', 'pael', 'grav', 'grus', 'tromle', 'stoeb', 'rejs', 'mal']);
+  expect(await stages(10)).toEqual(['riv', 'sten', 'planer', 'pael', 'grav', 'grus', 'tromle', 'stoeb', 'rejs', 'mal']);
+  expect(await stages(13)).toEqual(['riv', 'sten', 'planer', 'pael', 'grav', 'grus', 'tromle', 'stoeb', 'rejs', 'asfalt', 'mal']);
+  expect(await stages(16)).toEqual([
     'riv', 'sten', 'planer', 'pael', 'grav', 'grus', 'tromle', 'stoeb', 'taarn', 'vinduer', 'asfalt', 'mal',
   ]);
   game.expectNoErrors();
@@ -51,7 +52,7 @@ test('the bulldozer pushes the heaps flat by driving into them', async ({ page }
 });
 
 test('the wheel loader scoops each rock and tips it in the skip', async ({ page }) => {
-  const game = await Game.openWithSave(page, at(5, 0));
+  const game = await Game.openWithSave(page, at(7, 0));
   await game.goTo('RockScene');
   expect((await game.state()).stage).toBe('sten');
 
@@ -74,7 +75,7 @@ test('the wheel loader scoops each rock and tips it in the skip', async ({ page 
 });
 
 test('a bigger bucket carries two rocks to the skip at once', async ({ page }) => {
-  const game = await Game.openWithSave(page, { ...at(5, 0), owned: ['op-laesser-1'] });
+  const game = await Game.openWithSave(page, { ...at(7, 0), owned: ['op-laesser-1'] });
   await game.goTo('RockScene');
   const second = await game.sceneCall<{ x: number }>('RockScene', 'rock', 1);
   const x = await game.sceneField<number>('RockScene', 'x');
@@ -87,7 +88,7 @@ test('a bigger bucket carries two rocks to the skip at once', async ({ page }) =
 });
 
 test('the wrecking ball knocks the old shed down, swing by swing', async ({ page }) => {
-  const game = await Game.openWithSave(page, at(6, 0));
+  const game = await Game.openWithSave(page, at(10, 0));
   await game.goTo('WreckScene');
   expect((await game.state()).stage).toBe('riv');
 
@@ -107,7 +108,7 @@ test('the wrecking ball knocks the old shed down, swing by swing', async ({ page
 
 test('the lift truck puts the windows in where the basket reaches them', async ({ page }) => {
   // the hospital, its frame up
-  const game = await Game.openWithSave(page, at(8, 9, { placed: 5 }));
+  const game = await Game.openWithSave(page, at(16, 9, { placed: 5 }));
   await game.goTo('WindowScene');
   expect((await game.state()).stage).toBe('vinduer');
   const n: number = await page.evaluate(() => window.__state.currentProject.floors * 5 - 1);
@@ -125,7 +126,7 @@ test('the lift truck puts the windows in where the basket reaches them', async (
 });
 
 test('the paver lays the asphalt, strip by strip', async ({ page }) => {
-  const game = await Game.openWithSave(page, at(7, 9, { placed: 3 }));
+  const game = await Game.openWithSave(page, at(13, 9, { placed: 3 }));
   await game.goTo('AsphaltScene');
   expect((await game.state()).stage).toBe('asfalt');
 

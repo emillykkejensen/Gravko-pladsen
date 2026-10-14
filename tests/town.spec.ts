@@ -102,7 +102,7 @@ test('the buttons a child presses stay clear of the bottom edge', async ({ page 
 
 test('the workshop has a bay for every machine, and they all fit', async ({ page }) => {
   const game = await Game.openWithSave(page, readySave({}, {
-    project: 9, town: townOf(9), owned: ['op-gravko-1'],
+    project: 17, town: townOf(17), owned: ['op-gravko-1'],
   }));
   await game.goTo('GarageScene');
   for (const id of ['gravko', 'bulldozer', 'laesser', 'nedriv', 'asfalt', 'lift']) {
@@ -116,7 +116,7 @@ test('the workshop has a bay for every machine, and they all fit', async ({ page
 
 test('every new machine can be got ready: filled up and its own job done', async ({ page }) => {
   const game = await Game.openWithSave(page, {
-    project: 9, town: townOf(9),
+    project: 17, town: townOf(17),
     machines: Object.fromEntries(['bulldozer', 'laesser', 'nedriv', 'asfalt', 'lift'].map(id => [id,
       { ...readyMachine(id), diesel: 0, oil: 0, extra: [false, false, false] }])),
   });
@@ -125,5 +125,35 @@ test('every new machine can be got ready: filled up and its own job done', async
     for (let i = 0; i < 3; i++) await game.tapNamed('PrepScene', `extra:${i}`);
     await game.expectState(s => s.machines[id].extra, `${id}'s own job`).toEqual([true, true, true]);
   }
+  game.expectNoErrors();
+});
+
+test('a machine can be upgraded in the workshop, while it is being filled up', async ({ page }) => {
+  const game = await Game.openWithSave(page, readySave({}, { stars: 12 }));
+  await game.goTo('PrepScene', { machine: 'gravko' });
+  await game.expectScreenText('PrepScene').toContain('Opgrader: Stor skovl');
+  await game.tapNamed('PrepScene', 'upgrade');
+  await game.expectState(s => s.owned).toEqual(['op-gravko-1']);
+  expect((await game.state()).stars).toBe(7);
+  await game.expectScreenText('PrepScene', 'the next one is offered').toContain('Opgrader: Kæmpeskovl');
+  // ten stars for the next one, and only seven left: nothing is spent
+  await game.tapNamed('PrepScene', 'upgrade');
+  expect((await game.state()).owned).toEqual(['op-gravko-1']);
+  expect((await game.state()).stars).toBe(7);
+  game.expectNoErrors();
+});
+
+test('ordinary buildings stand between the big ones on the road', async ({ page }) => {
+  const game = await Game.open(page);
+  const kinds: string[] = await page.evaluate(async (url) => {
+    const m: any = await import(/* @vite-ignore */ url);
+    return m.PROJECTS.map((p: { kind: string }) => p.kind);
+  }, '/src/state/Projects.ts');
+  expect(kinds).toHaveLength(17);
+  const big = ['busstation', 'brandstation', 'politi', 'togstation', 'hospital'];
+  const at = big.map(k => kinds.indexOf(k));
+  for (let i = 1; i < at.length; i++) expect(at[i] - at[i - 1], `two buildings before ${big[i]}`).toBe(3);
+  await game.start();
+  await game.expectScreenText('TownScene').toContain('Rækkehusene');
   game.expectNoErrors();
 });

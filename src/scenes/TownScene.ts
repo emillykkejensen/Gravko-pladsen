@@ -392,8 +392,8 @@ export class TownScene extends BaseScene {
     // the street lamps stand in front of the houses
     townFront(this, o => this.onRoad(o), t);
 
-    // the hospital finished: everything the town was waiting for is there
-    if (this.arrived === LANDMARKS - 1 && gameState.landmarksDone) {
+    // the last of the town's own buildings in: everything the town was waiting for is there
+    if (this.arrived !== null && this.arrived < LANDMARKS && gameState.landmarksDone) {
       this.time.delayedCall(900, () => {
         const cx = this.cameras.main.scrollX + this.scale.width / 2;
         showConfetti(this, cx, 200 + this.dy, 50);

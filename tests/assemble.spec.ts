@@ -106,7 +106,7 @@ test('the bigger buildings each bring a new machine, built like the rest', async
 // each of the town's big buildings brings one more: the stage index is where it is first used
 const BRINGS = [
   ['pael', 2, 0], ['taarnkran', 3, 5],
-  ['bulldozer', 4, 0], ['laesser', 5, 0], ['nedriv', 6, 0], ['asfalt', 7, 9], ['lift', 8, 9],
+  ['bulldozer', 4, 0], ['laesser', 7, 0], ['nedriv', 10, 0], ['asfalt', 13, 9], ['lift', 16, 9],
 ] as const;
 
 for (const [machine, project, stage] of BRINGS) {

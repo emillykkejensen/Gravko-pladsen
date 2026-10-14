@@ -136,8 +136,8 @@ test('everything in the shop can be bought, and the town still draws with all of
   // the whole town built, and every machine, so nothing is waiting for anything
   const game = await Game.openWithSave(page, {
     stars: 1000,
-    town: townOf(9),
-    project: 9,
+    town: townOf(17),
+    project: 17,
     machines: Object.fromEntries(MACHINE_IDS.map(id => [id, readyMachine(id)])),
   });
   const ids: string[] = await page.evaluate(async (url) => {
