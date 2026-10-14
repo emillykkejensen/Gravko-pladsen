@@ -88,8 +88,9 @@ export class TownScene extends BaseScene {
     cam.scrollX = plot === null && saved !== undefined ? saved : this.plotX(focus) - this.scale.width / 2;
     this.remember();
 
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (p.y > this.layout.roadY + 30 || p.y < 70) return;
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+      // a button (the shop, the arrows at the ends) is a button, not the road
+      if (over.length || p.y > this.layout.roadY + 30 || p.y < 70) return;
       this.slide = { x: p.x, scroll: cam.scrollX, moved: false, t: this.time.now };
       this.velocity = 0;
     });

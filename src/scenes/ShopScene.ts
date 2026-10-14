@@ -259,13 +259,20 @@ export class ShopScene extends BaseScene {
     if (item.shelf === 'byen' || item.shelf === 'biler') return decorationPreview(this, item.id).setScale(0.82);
     const up = item as Upgrade;
     if (up.machine) {
+      // Twelve whole machines in vector art cost too much to redraw every frame, and they
+      // never move: each is baked to a small texture.
       const c = this.add.container(0, 0);
       const g = this.add.graphics();
       const b = machineBounds(up.machine);
       const scale = Math.min(110 / b.w, 74 / b.h);
-      g.setPosition(-(b.x + b.w / 2) * scale, 40).setScale(scale);
+      const W = 130;
+      const H = 96;
+      g.setPosition(W / 2 - (b.x + b.w / 2) * scale, H - 6).setScale(scale);
       drawMachine(g, up.machine);
-      c.add(g);
+      const rt = this.add.renderTexture(0, 40 - H + 6, W, H).setOrigin(0.5, 0);
+      rt.draw(g);
+      g.destroy();
+      c.add(rt);
       return c;
     }
 

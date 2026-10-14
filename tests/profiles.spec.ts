@@ -73,8 +73,9 @@ test('a new player is made on the on-screen keyboard, and their name and animal 
   // Close the game and open it again.
   await page.reload();
   await game.waitForScene('MainMenuScene');
-  expect(await cardText(game, id), 'the card is still there, with the star on it')
-    .toEqual(expect.arrayContaining(['Emil', '1']));
+  // no stars yet: those come from finished buildings, not machine parts
+  expect(await cardText(game, id), 'the card is still there, with its star count')
+    .toEqual(expect.arrayContaining(['Emil', '0']));
   await game.start(id);
   await game.expectState(s => s.machines.gravko.parts).toEqual(['baelter']);
   game.expectNoErrors();

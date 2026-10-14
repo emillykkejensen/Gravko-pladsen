@@ -120,7 +120,7 @@ test('the town never fills up: after the hospital the road goes on with houses',
   // a house again, borrowing one of the big buildings' jobs
   const stages: string[] = await page.evaluate(() => window.__state.stages.map((st: { id: string }) => st.id));
   expect(stages).toEqual(['planer', 'grav', 'grus', 'stoeb', 'rejs', 'mal']);
-  await game.expectScreenText('TownScene', 'everything the town waited for is there').toContain('Byen er færdig!');
+  expect(await page.evaluate(() => window.__state.landmarksDone), 'everything the town waited for is there').toBe(true);
   game.expectNoErrors();
 });
 

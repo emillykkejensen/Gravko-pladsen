@@ -150,7 +150,7 @@ export function decorationPreview(scene: Phaser.Scene, id: string): Phaser.GameO
       c.add(ambulance(scene).setPosition(0, 24).setScale(0.95));
       break;
     case 'tog':
-      c.add(train(scene).setPosition(30, 20).setScale(0.62));
+      c.add(train(scene).setPosition(44, 20).setScale(0.46));
       break;
     case 'helikopter':
       c.add(helicopter(scene, 0, 4, false));
