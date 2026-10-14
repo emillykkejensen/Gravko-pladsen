@@ -39,6 +39,42 @@ function paint(): Livery {
   return liveryById(trying ?? gameState.livery);
 }
 
+/** An upgrade level being shown off — the shop's preview of what an upgrade looks like. */
+let tryingLevel: { id: MachineId; level: number } | null = null;
+
+/** How far a machine is upgraded: 0, 1 or 2. Read at draw time, like the paint. */
+function grade(id: MachineId): number {
+  if (tryingLevel?.id === id) return tryingLevel.level;
+  return gameState.level(id);
+}
+
+/** How much bigger an upgraded part is drawn, at each level. */
+const GROW = [1, 1.3, 1.6];
+
+/**
+ * How much bigger a machine's upgraded part is: its bucket, bed, drum, hook, hammer, blade,
+ * ball, screed or basket. An upgrade a child bought should show on the machine itself.
+ */
+export function grown(id: MachineId): number {
+  return GROW[grade(id)] ?? 1;
+}
+
+/** The same for a part too small to show otherwise — a crane's hook: it grows faster. */
+function grownMore(id: MachineId): number {
+  return 1 + (grown(id) - 1) * 2;
+}
+
+/** Draws a machine as if upgraded to `level`, for the length of `draw`. */
+export function atLevel(id: MachineId, level: number, draw: () => void): void {
+  const before = tryingLevel;
+  tryingLevel = { id, level };
+  try {
+    draw();
+  } finally {
+    tryingLevel = before;
+  }
+}
+
 /** Draws with another coat of paint for the length of `draw`, for the shop's previews. */
 export function inLivery(id: string, draw: () => void): void {
   const before = trying;
@@ -296,12 +332,17 @@ function gravkoBucket(
 ): void {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
+  // a bigger bucket for each upgrade, hanging from the same pin
+  const k = grown('gravko');
   // bucket outline in its own frame: x across the mouth, y down from the wrist
   const local = [
     { x: -12, y: -6 }, { x: 20, y: 2 }, { x: 26, y: 40 },
     { x: 8, y: 56 }, { x: -20, y: 44 }, { x: -22, y: 12 },
   ];
-  const to = (p: Pt) => ({ x: wrist.x + p.x * cos - p.y * sin, y: wrist.y + p.x * sin + p.y * cos });
+  const to = (p: Pt) => ({
+    x: wrist.x + p.x * k * cos - p.y * k * sin,
+    y: wrist.y + p.x * k * sin + p.y * k * cos,
+  });
   poly(g, s, local.map(to), COLORS.rubber);
   if (s.ghost) return;
   // teeth along the mouth
@@ -316,11 +357,11 @@ function gravkoBucket(
     // a heap of earth in the mouth, growing with the load
     const heap = to({ x: 4, y: 20 });
     g.fillStyle(COLORS.dirtDeep);
-    g.fillCircle(heap.x, heap.y, 14 * load + 4);
+    g.fillCircle(heap.x, heap.y, (14 * load + 4) * k);
     g.fillStyle(COLORS.dirt);
-    g.fillCircle(heap.x - 3, heap.y - 3, 11 * load + 3);
+    g.fillCircle(heap.x - 3, heap.y - 3, (11 * load + 3) * k);
     g.fillStyle(COLORS.dirtLight);
-    g.fillCircle(heap.x - 6, heap.y - 6, 4 * load + 1);
+    g.fillCircle(heap.x - 6, heap.y - 6, (4 * load + 1) * k);
   }
   pin(g, s, wrist, 5);
 }
@@ -368,16 +409,18 @@ export function drawTruckBed(g: Phaser.GameObjects.Graphics, angle: number, load
     const dy = p.y - BED_HINGE.y;
     return { x: BED_HINGE.x + dx * cos - dy * sin, y: BED_HINGE.y + dx * sin + dy * cos };
   };
+  // a bigger bed has higher sides
+  const rim = -136 - 24 * grade('lastbil');
   const shape = [
-    { x: -146, y: -136 }, { x: 46, y: -136 }, { x: 40, y: -64 }, { x: -136, y: -64 },
+    { x: -146, y: rim }, { x: 46, y: rim }, { x: 40, y: -64 }, { x: -136, y: -64 },
   ];
   if (load > 0 && !s.ghost) {
     // gravel heaped above the rim
-    const top = -136 - 22 * load;
+    const top = rim - 22 * load;
     g.fillStyle(COLORS.gravelDeep);
     const heap = [
-      to({ x: -138, y: -134 }), to({ x: -110, y: top + 6 }), to({ x: -50, y: top }),
-      to({ x: 10, y: top + 6 }), to({ x: 40, y: -134 }),
+      to({ x: -138, y: rim + 2 }), to({ x: -110, y: top + 6 }), to({ x: -50, y: top }),
+      to({ x: 10, y: top + 6 }), to({ x: 40, y: rim + 2 }),
     ];
     g.fillPoints(heap, true);
     g.fillStyle(COLORS.gravel);
@@ -390,11 +433,11 @@ export function drawTruckBed(g: Phaser.GameObjects.Graphics, angle: number, load
   if (s.ghost) return;
   g.lineStyle(LINE.thin, paint().deep);
   for (let x = -110; x <= 20; x += 32) {
-    const a = to({ x, y: -130 });
+    const a = to({ x, y: rim + 6 });
     const b = to({ x: x + 2, y: -70 });
     g.lineBetween(a.x, a.y, b.x, b.y);
   }
-  const lip = [to({ x: -150, y: -142 }), to({ x: 50, y: -142 }), to({ x: 48, y: -132 }), to({ x: -148, y: -132 })];
+  const lip = [to({ x: -150, y: rim - 6 }), to({ x: 50, y: rim - 6 }), to({ x: 48, y: rim + 4 }), to({ x: -148, y: rim + 4 })];
   poly(g, s, lip, paint().deep);
 }
 
@@ -434,32 +477,38 @@ export const CHUTE_ROOT: Pt = { x: -136, y: -84 };
 export const CHUTE_REST: Pt = { x: -182, y: -46 };
 
 export function drawDrum(g: Phaser.GameObjects.Graphics, phase: number, s: Style = REAL): void {
-  const { x, y } = DRUM_CENTER;
+  // a bigger drum for each upgrade, growing upwards off its cradle
+  const kx = 1 + 0.12 * grade('betonbil');
+  const ky = 1 + 0.2 * grade('betonbil');
+  const x = DRUM_CENTER.x;
+  const y = DRUM_CENTER.y - (ky - 1) * 46;
+  const W = 176 * kx;
+  const H = 92 * ky;
   // cradle
-  box(g, s, x - 70, y + 34, 150, 14, 5, COLORS.rubber);
+  box(g, s, x - 70, DRUM_CENTER.y + 34, 150, 14, 5, COLORS.rubber);
   // the drum — a fat barrel, tipped up towards the back
   fill(g, s, COLORS.steelLight);
-  g.fillEllipse(x, y, 176, 92);
+  g.fillEllipse(x, y, W, H);
   line(g, s, LINE.thick);
-  g.strokeEllipse(x, y, 176, 92);
+  g.strokeEllipse(x, y, W, H);
   if (s.ghost) return;
   // the spiral stripes, slid along by `phase` so the drum visibly turns
   g.fillStyle(paint().body);
   for (let i = -2; i < 4; i++) {
-    const sx = x - 80 + (((i * 40 + phase * 40) % 200) + 200) % 200;
-    if (sx < x - 82 || sx > x + 70) continue;
-    const half = Math.sqrt(Math.max(0, 1 - ((sx - x) / 88) ** 2)) * 44;
+    const sx = x - 80 * kx + (((i * 40 + phase * 40) % 200) + 200) % 200 * kx;
+    if (sx < x - 82 * kx || sx > x + 70 * kx) continue;
+    const half = Math.sqrt(Math.max(0, 1 - ((sx - x) / (W / 2)) ** 2)) * (H / 2);
     g.fillPoints([
       { x: sx, y: y - half + 2 }, { x: sx + 16, y: y - half + 2 },
       { x: sx + 4, y: y + half - 2 }, { x: sx - 12, y: y + half - 2 },
     ], true);
   }
   g.lineStyle(LINE.thick, COLORS.outline);
-  g.strokeEllipse(x, y, 176, 92);
+  g.strokeEllipse(x, y, W, H);
   g.fillStyle(COLORS.white, 0.4);
-  g.fillEllipse(x - 10, y - 26, 110, 16);
+  g.fillEllipse(x - 10, y - 26 * ky, 110 * kx, 16);
   // the open end, where the concrete comes out
-  box(g, s, x - 98, y - 28, 22, 50, 9, COLORS.steelDeep);
+  box(g, s, x - W / 2 - 10, y - 28 * ky, 22, 50 * ky, 9, COLORS.steelDeep);
 }
 
 export function drawChute(g: Phaser.GameObjects.Graphics, tip: Pt, s: Style = REAL, wet = false): void {
@@ -493,22 +542,29 @@ export function drawCraneBoom(g: Phaser.GameObjects.Graphics, tip: Pt, s: Style 
 }
 
 /** The hook block on its rope. `from` is the boom tip. */
-export function drawHook(g: Phaser.GameObjects.Graphics, from: Pt, to: Pt, s: Style = REAL): void {
+/**
+ * The hook block on its rope. `from` is the boom tip. `k` makes it bigger — a stronger hook
+ * for an upgraded crane — with more ropes the stronger it is.
+ */
+export function drawHook(g: Phaser.GameObjects.Graphics, from: Pt, to: Pt, s: Style = REAL, k = 1): void {
   if (!s.ghost) {
     g.lineStyle(2.5, COLORS.outline);
-    g.lineBetween(from.x - 3, from.y, to.x - 3, to.y - 14);
-    g.lineBetween(from.x + 3, from.y, to.x + 3, to.y - 14);
+    const ropes = k > 1.9 ? [-6, -2, 2, 6] : k > 1.3 ? [-5, 0, 5] : [-3, 3];
+    for (const r of ropes) g.lineBetween(from.x + r, from.y, to.x + r * k, to.y - 14 * k);
   }
-  box(g, s, to.x - 11, to.y - 22, 22, 18, 5, paint().body);
+  box(g, s, to.x - 11 * k, to.y - 22 * k, 22 * k, 18 * k, 5, paint().body);
   if (s.ghost) return;
-  g.lineStyle(4.5, COLORS.outline);
-  g.beginPath();
-  g.arc(to.x, to.y + 6, 8, Phaser.Math.DegToRad(-80), Phaser.Math.DegToRad(200), false);
-  g.strokePath();
-  g.lineStyle(2.5, COLORS.steelLight);
-  g.beginPath();
-  g.arc(to.x, to.y + 6, 8, Phaser.Math.DegToRad(-80), Phaser.Math.DegToRad(200), false);
-  g.strokePath();
+  if (k > 1) {
+    // hazard stripes on a strong hook's block
+    g.fillStyle(COLORS.rubber);
+    for (let i = 0; i < 3; i++) g.fillRect(to.x - 9 * k + i * 7 * k, to.y - 18 * k, 3.5 * k, 10 * k);
+  }
+  for (const [w, c] of [[4.5 * k, COLORS.outline], [2.5 * k, COLORS.steelLight]] as const) {
+    g.lineStyle(w, c);
+    g.beginPath();
+    g.arc(to.x, to.y + 6 * k, 8 * k, Phaser.Math.DegToRad(-80), Phaser.Math.DegToRad(200), false);
+    g.strokePath();
+  }
 }
 
 function craneTurntable(g: Phaser.GameObjects.Graphics, s: Style): void {
@@ -543,6 +599,21 @@ function hubBolts(g: Phaser.GameObjects.Graphics, c: Pt, r: number, phase: numbe
 
 function rollerDrum(g: Phaser.GameObjects.Graphics, s: Style, phase = 0): void {
   const { x, y } = ROLLER_DRUM;
+  // a wider drum: its far end shows beside it, further out the wider it is, with a band
+  // of the drum's face between the two ends
+  const wide = grade('vejtromle');
+  if (wide > 0 && !s.ghost) {
+    const off = { x: 14 * wide, y: -9 * wide };
+    disc(g, s, x + off.x, y + off.y, ROLLER_DRUM_R, COLORS.steelDeep);
+    g.fillStyle(COLORS.steel);
+    g.fillPoints([
+      { x: x, y: y - ROLLER_DRUM_R }, { x: x + off.x, y: y + off.y - ROLLER_DRUM_R },
+      { x: x + off.x, y: y + off.y + ROLLER_DRUM_R }, { x: x, y: y + ROLLER_DRUM_R },
+    ], true);
+    g.lineStyle(LINE.base, COLORS.outline);
+    g.lineBetween(x, y - ROLLER_DRUM_R, x + off.x, y + off.y - ROLLER_DRUM_R);
+    g.lineBetween(x, y + ROLLER_DRUM_R, x + off.x, y + off.y + ROLLER_DRUM_R);
+  }
   disc(g, s, x, y, ROLLER_DRUM_R, COLORS.steel);
   if (s.ghost) return;
   g.fillStyle(COLORS.steelLight);
@@ -652,16 +723,20 @@ function pileMast(g: Phaser.GameObjects.Graphics, s: Style): void {
 
 /** The drop hammer, its bottom edge at `bottom`, and the cable up over the sheave. */
 export function drawHammer(g: Phaser.GameObjects.Graphics, bottom: number, s: Style = REAL): void {
-  const top = bottom - HAMMER_H;
+  // a heavier weight is a bigger one
+  const k = grown('pael');
+  const h = HAMMER_H * k;
+  const half = 22 * k;
+  const top = bottom - h;
   if (!s.ghost) {
     g.lineStyle(2.5, COLORS.outline);
     g.lineBetween(MAST_X, MAST_TOP + 10, MAST_X, top);
   }
-  box(g, s, MAST_X - 22, top, 44, HAMMER_H, 7, COLORS.rubber);
+  box(g, s, MAST_X - half, top, half * 2, h, 7, COLORS.rubber);
   if (s.ghost) return;
-  box(g, s, MAST_X - 22, top + 18, 44, 16, 4, paint().body);
+  box(g, s, MAST_X - half, top + 18 * k, half * 2, 16 * k, 4, paint().body);
   g.fillStyle(COLORS.white, 0.2);
-  g.fillRect(MAST_X - 18, top + 4, 8, HAMMER_H - 10);
+  g.fillRect(MAST_X - half + 4, top + 4, 8, h - 10);
 }
 
 /* --------------------------------------------------------- the tower crane ---- */
@@ -798,7 +873,7 @@ function towerTies(g: Phaser.GameObjects.Graphics, has: (part: string) => boolea
 /** The trolley at `at.x` along the jib, and the hook hanging from it down to `at.y`. */
 export function drawTowerHook(g: Phaser.GameObjects.Graphics, at: Pt, s: Style = REAL): void {
   box(g, s, at.x - 16, JIB_Y - 4, 32, 12, 4, COLORS.rubber);
-  drawHook(g, { x: at.x, y: JIB_Y + 8 }, at, s);
+  drawHook(g, { x: at.x, y: JIB_Y + 8 }, at, s, grownMore('taarnkran'));
 }
 
 /* ------------------------------------------------------------- the bulldozer ---- */
@@ -850,8 +925,11 @@ function dozerCab(g: Phaser.GameObjects.Graphics, s: Style): void {
  * its face, the way a bulldozer pushes a pile ahead of itself.
  */
 export function drawBlade(g: Phaser.GameObjects.Graphics, lift = 0, load = 0, s: Style = REAL): void {
+  // a wider blade for each upgrade: taller, and reaching further out
+  const k = grown('bulldozer');
   const bottom = -2 - lift;
-  const top = bottom - BLADE_H;
+  const top = bottom - BLADE_H * k;
+  const tall = BLADE_H * k;
   capsule(g, s, BLADE_PIN, { x: BLADE_X - 16, y: bottom - 24 }, 7, paint().deep);
   if (!s.ghost) {
     // the hydraulic ram that lifts it
@@ -870,17 +948,17 @@ export function drawBlade(g: Phaser.GameObjects.Graphics, lift = 0, load = 0, s:
   }
   // the curved mouldboard, its cutting edge at the bottom
   poly(g, s, [
-    { x: BLADE_X - 24, y: top + 4 }, { x: BLADE_X + 8, y: top - 8 }, { x: BLADE_X + 14, y: top + BLADE_H * 0.5 },
-    { x: BLADE_X + 10, y: bottom }, { x: BLADE_X - 22, y: bottom },
+    { x: BLADE_X - 24 * k, y: top + 4 }, { x: BLADE_X + 8 * k, y: top - 8 }, { x: BLADE_X + 14 * k, y: top + tall * 0.5 },
+    { x: BLADE_X + 10 * k, y: bottom }, { x: BLADE_X - 22 * k, y: bottom },
   ], paint().body);
   if (s.ghost) return;
   g.fillStyle(COLORS.rubber);
-  g.fillRect(BLADE_X - 20, bottom - 10, 32, 8);
+  g.fillRect(BLADE_X - 20 * k, bottom - 10, 32 * k, 8);
   g.fillStyle(paint().deep);
-  g.fillPoints([{ x: BLADE_X - 2, y: top }, { x: BLADE_X + 8, y: top - 4 }, { x: BLADE_X + 12, y: top + BLADE_H * 0.5 },
-    { x: BLADE_X + 8, y: bottom - 10 }, { x: BLADE_X - 2, y: bottom - 10 }], true);
+  g.fillPoints([{ x: BLADE_X - 2 * k, y: top }, { x: BLADE_X + 8 * k, y: top - 4 }, { x: BLADE_X + 12 * k, y: top + tall * 0.5 },
+    { x: BLADE_X + 8 * k, y: bottom - 10 }, { x: BLADE_X - 2 * k, y: bottom - 10 }], true);
   g.fillStyle(COLORS.white, 0.3);
-  g.fillRect(BLADE_X - 17, top + 8, 5, BLADE_H - 28);
+  g.fillRect(BLADE_X - 17 * k, top + 8, 5, tall - 28);
 }
 
 /* ---------------------------------------------------------- the wheel loader ---- */
@@ -958,13 +1036,15 @@ export function drawLoaderBucket(g: Phaser.GameObjects.Graphics, arm: number, ti
   const at = loaderTip(arm);
   const cos = Math.cos(-tilt);
   const sin = Math.sin(-tilt);
+  // a bigger bucket for each upgrade, on the same pin
+  const k = grown('laesser');
   // in the bucket's own frame: x forward, y down, origin at the pin
-  const to = (p: Pt) => ({ x: at.x + p.x * cos - p.y * sin, y: at.y + p.x * sin + p.y * cos });
+  const to = (p: Pt) => ({ x: at.x + p.x * k * cos - p.y * k * sin, y: at.y + p.x * k * sin + p.y * k * cos });
   if (rocks > 0 && !s.ghost) {
     // rocks heaped in the bucket, poking up over its sloping side
     for (let i = 0; i < Math.min(rocks, 4); i++) {
       const c = to({ x: 20 + (i % 2) * 22, y: -24 + (i % 2) * 10 - Math.floor(i / 2) * 16 });
-      drawRock(g, c.x, c.y, 13);
+      drawRock(g, c.x, c.y, 13 * Math.min(k, 1.3));
     }
   }
   // the bucket's side plate: a tall back, a flat floor, and a mouth open to the front and top
@@ -1050,8 +1130,14 @@ function wreckBoom(g: Phaser.GameObjects.Graphics, s: Style): void {
   g.lineBetween(-70, -150, WRECK_TIP.x, WRECK_TIP.y);
 }
 
+/** The wrecking ball's radius: a heavier ball is a bigger one. */
+export function ballRadius(): number {
+  return BALL_R * grown('nedriv');
+}
+
 /** The chain from the boom tip, and the ball at the end of it. */
 export function drawWreckingBall(g: Phaser.GameObjects.Graphics, ball: Pt, s: Style = REAL): void {
+  const BALL_R = ballRadius();
   if (!s.ghost) {
     // chain links
     const n = 12;
@@ -1126,13 +1212,22 @@ function paverSeat(g: Phaser.GameObjects.Graphics, s: Style): void {
 
 /** The screed dragged behind, which smooths the asphalt flat. `hot` makes it glow. */
 export function drawScreed(g: Phaser.GameObjects.Graphics, hot = false, s: Style = REAL): void {
-  box(g, s, SCREED_BACK, -46, 64, 40, 8, COLORS.steel);
+  // a wider screed reaches further back, with an extension bolted on for each upgrade
+  const ext = 34 * grade('asfalt');
+  const x = SCREED_BACK - ext;
+  const w = 64 + ext;
+  box(g, s, x, -46, w, 40, 8, COLORS.steel);
   if (s.ghost) return;
-  box(g, s, SCREED_BACK + 4, -40, 56, 12, 5, paint().body);
+  box(g, s, x + 4, -40, w - 8, 12, 5, paint().body);
+  for (let i = 1; i <= grade('asfalt'); i++) {
+    // the joins where each extension is bolted on
+    g.lineStyle(LINE.thin, COLORS.outline);
+    g.lineBetween(SCREED_BACK - 34 * (i - 1), -44, SCREED_BACK - 34 * (i - 1), -8);
+  }
   g.fillStyle(hot ? COLORS.orange : COLORS.steelDeep, hot ? 0.9 : 1);
-  g.fillRect(SCREED_BACK + 4, -14, 56, 6);
+  g.fillRect(x + 4, -14, w - 8, 6);
   // the walkway the screed operator stands on
-  box(g, s, SCREED_BACK - 6, -10, 76, 8, 3, COLORS.rubber);
+  box(g, s, x - 6, -10, w + 12, 8, 3, COLORS.rubber);
 }
 
 /* -------------------------------------------------------------- the lift truck ---- */
@@ -1160,21 +1255,24 @@ export function drawLiftArm(g: Phaser.GameObjects.Graphics, tip: Pt, s: Style = 
  * glass still to go in standing in it.
  */
 export function drawBasket(g: Phaser.GameObjects.Graphics, tip: Pt, panes = 0, s: Style = REAL): void {
-  const x = tip.x - 30;
+  // a bigger basket for each upgrade, holding more panes
+  const k = grown('lift');
+  const w = 60 * k;
+  const x = tip.x - w / 2;
   const y = tip.y + 4;
   if (panes > 0 && !s.ghost) {
-    for (let i = 0; i < Math.min(panes, 3); i++) {
+    for (let i = 0; i < Math.min(panes, Math.round(3 * k)); i++) {
       plate(g, x + 6 + i * 14, y - 14 - (i % 2) * 3, 16, 20, 2, COLORS.window, 1, LINE.hair);
     }
   }
-  box(g, s, x, y, 60, 34, 6, paint().body);
+  box(g, s, x, y, w, 34, 6, paint().body);
   if (s.ghost) return;
   g.fillStyle(COLORS.rubber);
-  g.fillRect(x + 4, y + 12, 52, 6);
+  g.fillRect(x + 4, y + 12, w - 8, 6);
   g.lineStyle(3, COLORS.outline);
-  g.strokeRect(x - 2, y - 14, 64, 2);
+  g.strokeRect(x - 2, y - 14, w + 4, 2);
   g.lineBetween(x, y - 14, x, y);
-  g.lineBetween(x + 60, y - 14, x + 60, y);
+  g.lineBetween(x + w, y - 14, x + w, y);
 }
 
 /* ================================================================ registry ======== */
@@ -1218,7 +1316,7 @@ export const ART: Record<MachineId, Record<string, PartArt>> = {
     krog: {
       center: { x: 150, y: -215 },
       size: { w: 40, h: 70 },
-      draw: (g, s) => drawHook(g, BOOM_TIP_REST, { x: BOOM_TIP_REST.x, y: BOOM_TIP_REST.y + HOOK_DROP }, s),
+      draw: (g, s) => drawHook(g, BOOM_TIP_REST, { x: BOOM_TIP_REST.x, y: BOOM_TIP_REST.y + HOOK_DROP }, s, grownMore('kran')),
     },
   },
   vejtromle: {
@@ -1433,7 +1531,7 @@ export function drawMachine(
     } else if (id === 'kran' && part === 'bom' && pose.boomTip) {
       drawCraneBoom(g, pose.boomTip);
     } else if (id === 'kran' && part === 'krog' && pose.boomTip) {
-      drawHook(g, pose.boomTip, pose.hook ?? { x: pose.boomTip.x, y: pose.boomTip.y + HOOK_DROP });
+      drawHook(g, pose.boomTip, pose.hook ?? { x: pose.boomTip.x, y: pose.boomTip.y + HOOK_DROP }, REAL, grownMore('kran'));
     } else if (id === 'vejtromle' && part === 'tromle' && pose.rollPhase !== undefined) {
       rollerDrum(g, REAL, pose.rollPhase);
     } else if (id === 'vejtromle' && part === 'hjul' && pose.rollPhase !== undefined) {

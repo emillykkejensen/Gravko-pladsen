@@ -6,7 +6,7 @@ import { caption } from '../helpers/Draw';
 import { dur } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
 import { showConfetti, showPraise } from '../objects/FeedbackEffects';
-import { ArmPose, GRAVKO_REST, Pt, drawMachine } from '../objects/MachineArt';
+import { ArmPose, GRAVKO_REST, Pt, drawMachine, grown } from '../objects/MachineArt';
 import { drawGround, drawHole, drawPilesUnder, groundY, holeFor, siteSky, siteWeather } from '../objects/SiteArt';
 import { stageDoneButton } from '../ui/StageDone';
 import { Pointer, drawTargetZone, hintBanner } from '../ui/Guide';
@@ -122,7 +122,7 @@ export class DigScene extends BaseScene {
     else if (this.face === -1 && x > this.baseX + 30) this.face = 1;
     this.goal = {
       x: (x - this.baseX) / (S * this.face),
-      y: (y - this.gy) / S - TIP,
+      y: (y - this.gy) / S - TIP * grown('gravko'),
     };
   }
 
@@ -327,8 +327,10 @@ export class DigScene extends BaseScene {
 
   private tipOnScreen(pose: ArmPose): Pt {
     // the teeth, rotated with the bucket, in machine coordinates
-    const tx = pose.wrist.x - Math.sin(pose.bucket) * TIP;
-    const ty = pose.wrist.y + Math.cos(pose.bucket) * TIP;
+    // a bigger bucket's teeth are further from the wrist
+    const tip = TIP * grown('gravko');
+    const tx = pose.wrist.x - Math.sin(pose.bucket) * tip;
+    const ty = pose.wrist.y + Math.cos(pose.bucket) * tip;
     return { x: this.baseX + tx * S * this.face, y: this.gy + ty * S };
   }
 

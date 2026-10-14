@@ -184,6 +184,16 @@ or 4, and each job uses it:
 | Nedrivningskran | Tung kugle, Kæmpekugle | each swing knocks 2, then 4 blocks down |
 | Liftbil | Stor kurv, Kæmpekurv | each window put in brings the 1, then 3 beside it on the same floor |
 
+Every upgrade shows on the machine itself, everywhere it is drawn — the workshop, the
+site, the town, the shop's card, which shows the machine with the upgrade on: a bigger
+bucket on the excavator and the wheel loader, higher sides on the truck's bed, a bigger
+mixer drum, a bigger hook block with more ropes on both cranes, a wider roller drum whose far
+end shows, a bigger weight on the pile driver, a taller and wider bulldozer blade, a bigger
+wrecking ball, screed extensions bolted on behind the paver and a wider basket on the lift
+truck. `MachineArt` reads the level at draw time, like the paint (`grown()`; the shop's
+cards use `atLevel()`), and the scenes that care about a part's size — where the bucket's
+teeth are, how big the wrecking ball is — ask it too.
+
 An upgrade can also be bought right in the workshop, while the machine is being filled up:
 the plate over the diesel pump shows its next upgrade and price, and a tap buys it. The
 workshop shows a little star by a machine's name for each upgrade it has.

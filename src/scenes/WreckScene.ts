@@ -6,7 +6,7 @@ import { caption, plate } from '../helpers/Draw';
 import { dur, reduceMotion } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
 import { showConfetti, showPraise } from '../objects/FeedbackEffects';
-import { BALL_R, Pt, WRECK_TIP, drawMachine } from '../objects/MachineArt';
+import { BALL_R, Pt, WRECK_TIP, ballRadius, drawMachine } from '../objects/MachineArt';
 import { drawGround, groundY, siteSky, siteWeather } from '../objects/SiteArt';
 import { stageDoneButton } from '../ui/StageDone';
 import { Pointer, hintBanner } from '../ui/Guide';
@@ -100,6 +100,11 @@ export class WreckScene extends BaseScene {
     return { x: CRANE_X + this.dx + WRECK_TIP.x * S, y: this.gy + WRECK_TIP.y * S };
   }
 
+  /** The shed's near wall on screen: further off for a bigger ball, so it hangs clear. */
+  private get shedX(): number {
+    return SHED_X + this.dx + (ballRadius() - BALL_R) * S;
+  }
+
   private get length(): number {
     return CHAIN * S;
   }
@@ -126,7 +131,7 @@ export class WreckScene extends BaseScene {
   }
 
   private blockAt(b: { col: number; row: number }): { x: number; y: number } {
-    return { x: SHED_X + this.dx + b.col * BLOCK_W, y: this.gy - 6 - (b.row + 1) * BLOCK_H };
+    return { x: this.shedX + b.col * BLOCK_W, y: this.gy - 6 - (b.row + 1) * BLOCK_H };
   }
 
   /** The shed's near wall: the left side of the first block still standing. */
@@ -139,7 +144,7 @@ export class WreckScene extends BaseScene {
   private maxForward(): number {
     const face = this.face();
     if (face === null) return FORWARD;
-    const reach = (face - BALL_R * S - 2 - this.tip.x) / this.length;
+    const reach = (face - ballRadius() * S - 2 - this.tip.x) / this.length;
     return Math.min(FORWARD, Math.asin(Phaser.Math.Clamp(reach, -1, 1)));
   }
 
@@ -168,7 +173,7 @@ export class WreckScene extends BaseScene {
     // the rubble from what has come down, in a heap at the shed's foot
     const rubble = this.dyn(this.add.graphics());
     for (let i = 0; i < wrecked; i++) {
-      const x = SHED_X + this.dx + 20 + ((i * 37) % (COLS * BLOCK_W));
+      const x = this.shedX + 20 + ((i * 37) % (COLS * BLOCK_W));
       const y = this.gy - 10 - Math.floor(i / 3) * 6;
       rubble.save();
       rubble.fillStyle(COLORS.woodDeep);
@@ -191,7 +196,7 @@ export class WreckScene extends BaseScene {
     }
     if (wrecked === 0) {
       const top = this.gy - 6 - this.rows * BLOCK_H;
-      const x0 = SHED_X + this.dx - 10;
+      const x0 = this.shedX - 10;
       const w = COLS * BLOCK_W + 20;
       shed.fillStyle(COLORS.steelDeep);
       shed.fillPoints([{ x: x0, y: top }, { x: x0 + w, y: top }, { x: x0 + w - 12, y: top - 22 }, { x: x0 + 12, y: top - 22 }], true);
@@ -237,7 +242,7 @@ export class WreckScene extends BaseScene {
       this.spin *= 1 - 0.4 * h;
       this.angle += this.spin * h;
       const face = this.face();
-      if (face !== null && this.spin > 0 && this.ball().x + BALL_R * S >= face) {
+      if (face !== null && this.spin > 0 && this.ball().x + ballRadius() * S >= face) {
         this.hit(this.spin);
         return;
       }
@@ -302,7 +307,7 @@ export class WreckScene extends BaseScene {
     this.phase = 'done';
     this.grab = false;
     gameState.completeStage();
-    const cx = SHED_X + this.dx + (COLS * BLOCK_W) / 2;
+    const cx = this.shedX + (COLS * BLOCK_W) / 2;
     audio.horn();
     showConfetti(this, cx, 240 + this.dy, 36);
     showPraise(this, cx, 210 + this.dy, 'Skuret er revet ned!');
