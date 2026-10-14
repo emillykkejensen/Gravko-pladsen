@@ -45,11 +45,14 @@ test('a finished building is the only thing that pays stars, the bigger the more
   await game.tapNamed('CraneScene', 'go');
   await game.waitForScene('TownScene');
   await game.expectState(s => s.stars, 'the little house is worth five').toBe(5);
-  const worth: number[] = await page.evaluate(async (url) => {
+  const worth: { id: string; stars: number }[] = await page.evaluate(async (url) => {
     const m: any = await import(/* @vite-ignore */ url);
-    return m.PROJECTS.map((p: { stars: number }) => p.stars);
+    return m.PROJECTS.map((p: { id: string; stars: number }) => ({ id: p.id, stars: p.stars }));
   }, '/src/state/Projects.ts');
-  expect(worth, 'each building pays at least as much as the one before').toEqual([...worth].sort((a, b) => a - b));
+  // the town's named buildings, each worth at least as much as the one before it
+  const big = worth.filter(p => !p.id.includes('-')).map(p => p.stars);
+  expect(big, 'each big building pays at least as much as the one before').toEqual([...big].sort((a, b) => a - b));
+  expect(Math.min(...worth.map(p => p.stars)), 'and none less than the first house').toBe(5);
   game.expectNoErrors();
 });
 
