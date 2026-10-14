@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { COLORS, SIZE } from '../config';
+import { BUTTON_FLOOR, COLORS, SIZE } from '../config';
 import { gameState } from '../state/GameState';
 import { BANGS_PER_PILE } from '../state/Projects';
-import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
+import { addBackButton, addSceneTitle, addStarCounter } from '../ui/Chrome';
 import { button, caption } from '../helpers/Draw';
 import { dur, popIn, reduceMotion } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
@@ -189,7 +189,7 @@ export class PileScene extends BaseScene {
     });
 
     if (this.phase === 'parked') {
-      const bang = button(this, this.bangX, this.scale.height - 52, 'Bank!', COLORS.orange,
+      const bang = button(this, this.bangX, this.scale.height - BUTTON_FLOOR, 'Bank!', COLORS.orange,
         () => this.bang(), 150, 56, SIZE.heading);
       bang.setName('bang');
       this.dyn(bang);
@@ -209,7 +209,7 @@ export class PileScene extends BaseScene {
         if (this.grab === null) pointer.point(x, this.gy - 40);
         else pointer.hide();
       } else if (this.phase === 'parked') {
-        pointer.point(this.bangX, this.scale.height - 86);
+        pointer.point(this.bangX, this.scale.height - BUTTON_FLOOR - 34);
       } else {
         pointer.hide();
       }
@@ -255,7 +255,6 @@ export class PileScene extends BaseScene {
       if (pileIn) {
         const x = this.mastX;
         showRing(this, x, this.gy - 6, COLORS.machine);
-        award(this, 1, x, this.gy - 20);
         this.target = -1;
         if (gameState.pilesDone) {
           this.finish();
@@ -280,7 +279,8 @@ export class PileScene extends BaseScene {
         { y: head - LIFT, duration: 320, ease: 'Sine.easeOut', onUpdate: () => { this.lifted = state.y; } },
         // falls to where the pile's head will be once this bang has driven it
         {
-          y: head + ((PILE_LEN - PROUD) / BANGS_PER_PILE) / S,
+          y: head + ((PILE_LEN - PROUD) / BANGS_PER_PILE) * Math.min(gameState.capacity('pael'),
+            BANGS_PER_PILE - this.bangs(this.target)) / S,
           duration: 130,
           ease: 'Quad.easeIn',
           onUpdate: () => { this.lifted = state.y; },
@@ -313,7 +313,6 @@ export class PileScene extends BaseScene {
     audio.horn();
     showConfetti(this, cx, 220 + this.dy, 36);
     showPraise(this, cx, 200 + this.dy, 'Pælene er banket ned!');
-    award(this, 3, cx, this.gy);
     this.refresh();
   }
 }

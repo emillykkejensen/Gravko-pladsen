@@ -172,6 +172,15 @@ export const LINE = {
   heavy: 5,
 };
 
+/**
+ * How far above the bottom edge a button's middle sits, at the least.
+ *
+ * A phone's home gesture starts at the bottom edge, and a child pressing a big button that
+ * hugged it kept swiping out of the game by mistake. Every button a child presses stays this
+ * far up.
+ */
+export const BUTTON_FLOOR = 96;
+
 /** Shared depths so effects always draw above a refreshed layer. */
 export const DEPTH = {
   background: 0,
@@ -187,17 +196,18 @@ export const DEPTH = {
 /**
  * Builder ranks. A read-out of effort, not a gate — nothing to unlock, nothing to fail,
  * no way to go backwards. They count every star ever earned, so spending stars in the shop
- * never takes a rank away.
+ * never takes a rank away. Stars come only from finished buildings, so the steps are set by
+ * them: the first house makes a Hjælper, and the town's own nine buildings a Mesterbygger.
  */
 export const RANKS = [
   { at: 0, name: 'Lærling' },
-  { at: 10, name: 'Hjælper' },
-  { at: 25, name: 'Maskinfører' },
-  { at: 45, name: 'Formand' },
-  { at: 70, name: 'Byggeleder' },
-  { at: 100, name: 'Bygmester' },
-  { at: 160, name: 'Mesterbygger' },
-  { at: 240, name: 'Byens helt' },
+  { at: 5, name: 'Hjælper' },
+  { at: 11, name: 'Maskinfører' },
+  { at: 19, name: 'Formand' },
+  { at: 29, name: 'Byggeleder' },
+  { at: 51, name: 'Bygmester' },
+  { at: 77, name: 'Mesterbygger' },
+  { at: 120, name: 'Byens helt' },
 ];
 
 export interface RankInfo {

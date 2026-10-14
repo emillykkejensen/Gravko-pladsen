@@ -69,7 +69,7 @@ export class ProfileScene extends Phaser.Scene {
     this.buildNameField(width / 2, 190);
     this.buildKeyboard(width / 2, 268);
 
-    button(this, width / 2, height - 52, 'Færdig', COLORS.green, () => this.finish(), 230, 58, SIZE.title)
+    button(this, width / 2, height - 82, 'Færdig', COLORS.green, () => this.finish(), 230, 58, SIZE.title)
       .setData('action', 'done')
       .setName('done');
 

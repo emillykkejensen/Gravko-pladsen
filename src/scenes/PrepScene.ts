@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { COLORS, INK, LINE, SIZE, text } from '../config';
 import { gameState } from '../state/GameState';
 import { EXTRA_SPOTS, ExtraKind, MACHINES, MachineId } from '../state/Machines';
-import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
+import { addBackButton, addSceneTitle, addStarCounter } from '../ui/Chrome';
 import { button, plate, progressBar, shade, shadow, sheen, tappable } from '../helpers/Draw';
 import { dur, popIn, reduceMotion } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
@@ -25,7 +25,8 @@ const OIL_RATE = 0.6;
 const PUMP = { x: 70, top: 214 };
 const NOZZLE_HOME = { x: 132, y: 286 };
 const CAN_HOME = { x: 188, y: 406 };
-const GO = { x: 640, y: 500 };
+/** The "go" button: its middle BUTTON_FLOOR above the 550 stage's bottom. */
+const GO = { x: 640, y: 454 };
 
 type Tool = 'diesel' | 'oil';
 
@@ -385,7 +386,6 @@ export class PrepScene extends BaseScene {
     showSparkle(this, p.x, p.y, 50, 50);
     showCheckmark(this, p.x, p.y - 30);
     if (!gameState.needs(this.machine).extra) {
-      award(this, 1, p.x, p.y);
       showToast(this, p.x, p.y - 70, MACHINES[this.machine].extra.done + '!');
     }
     this.afterJob();
@@ -452,7 +452,6 @@ export class PrepScene extends BaseScene {
       if (full) {
         showToast(this, cap.x, cap.y - 60, tool === 'diesel' ? 'Fuld tank!' : 'Fuld af olie!');
         showSparkle(this, cap.x, cap.y, 60, 60);
-        award(this, 1, cap.x, cap.y);
         this.letGo();
       }
     });
@@ -534,7 +533,6 @@ export class PrepScene extends BaseScene {
         audio.engine();
         showConfetti(this, cx, 200, 30);
         showPraise(this, cx, 210, 'Klar til arbejde!');
-        award(this, 1, cx, 240);
       });
     }
     // The tool tween has to finish before the layer is rebuilt under it.

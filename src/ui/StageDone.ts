@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import { COLORS, SIZE } from '../config';
+import { BUTTON_FLOOR, COLORS, SIZE } from '../config';
 import { button } from '../helpers/Draw';
 import { popIn } from '../helpers/Motion';
 import { nextRoute } from '../helpers/Route';
@@ -14,7 +14,7 @@ export function stageDoneButton(
   scene: Phaser.Scene,
   add: <T extends Phaser.GameObjects.GameObject>(o: T) => T,
   x = scene.scale.width / 2,
-  y = scene.scale.height - 50
+  y = scene.scale.height - BUTTON_FLOOR
 ): Phaser.GameObjects.Container {
   const go = button(scene, x, y, 'Videre!', COLORS.green, () => {
     const route = nextRoute();

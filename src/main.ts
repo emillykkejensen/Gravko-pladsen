@@ -17,6 +17,11 @@ import { PourScene } from './scenes/PourScene';
 import { CraneScene } from './scenes/CraneScene';
 import { PileScene } from './scenes/PileScene';
 import { RollScene } from './scenes/RollScene';
+import { PlanerScene } from './scenes/PlanerScene';
+import { RockScene } from './scenes/RockScene';
+import { WreckScene } from './scenes/WreckScene';
+import { AsphaltScene } from './scenes/AsphaltScene';
+import { WindowScene } from './scenes/WindowScene';
 import { ShopScene } from './scenes/ShopScene';
 import { SettingsScene } from './scenes/SettingsScene';
 
@@ -51,6 +56,11 @@ const config: Phaser.Types.Core.GameConfig = {
     CraneScene,
     PileScene,
     RollScene,
+    PlanerScene,
+    RockScene,
+    WreckScene,
+    AsphaltScene,
+    WindowScene,
     ShopScene,
     SettingsScene,
   ],

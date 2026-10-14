@@ -31,8 +31,8 @@ test('diesel, oil and greasing make the excavator ready, and it drives to the si
 
   await game.expectState(s => s.machines.gravko.extra).toEqual([true, true, true]);
   await game.expectState(s => s.next.kind, 'ready means the next job is on the site').toBe('site');
-  // diesel, oil, the greasing and being ready each pay one
-  await game.expectState(s => s.stars).toBe(4);
+  // only finished buildings pay stars
+  expect((await game.state()).stars).toBe(0);
 
   // the tanks are saved, not just held in memory
   const save = await game.save();

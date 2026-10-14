@@ -34,6 +34,8 @@ export abstract class BaseScene extends Phaser.Scene {
   protected background!: Phaser.GameObjects.Container;
   protected ambient!: Phaser.GameObjects.Container;
   protected dynamic!: Phaser.GameObjects.Container;
+  /** The baked background, for a scene whose camera moves and wants it to stay put. */
+  protected backdrop!: Phaser.GameObjects.RenderTexture;
 
   /** Per-frame updates that must survive until the next refresh. */
   private updaters: ((dt: number) => void)[] = [];
@@ -59,7 +61,7 @@ export abstract class BaseScene extends Phaser.Scene {
 
     // The container is consumed here. It is replaced with an empty one so a late add from
     // a subclass renders in the right place instead of throwing.
-    flatten(this, this.background, DEPTH.background);
+    this.backdrop = flatten(this, this.background, DEPTH.background);
     this.background = this.add.container(0, 0).setDepth(DEPTH.background);
 
     this.buildAmbient();

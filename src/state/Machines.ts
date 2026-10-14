@@ -4,15 +4,23 @@
  * No Phaser here — the test harness imports this in Node. How each part is drawn lives in
  * objects/MachineArt.ts, keyed by the same ids.
  *
- * The first four build every house. The last three arrive with the bigger buildings: the
+ * The first four build every house. The next three arrive with the bigger buildings: the
  * road roller with the villa, the pile driver with the shop, and the tower crane with the
- * high-rise, which is taller than the mobile crane can reach.
+ * high-rise, which is taller than the mobile crane can reach. The last five arrive with the
+ * town's big buildings, one each: the bulldozer with the bus station, the wheel loader with
+ * the fire station, the wrecking crane with the police station, the asphalt paver with the
+ * railway station and the lift truck with the hospital.
  */
 
-export type MachineId = 'gravko' | 'lastbil' | 'betonbil' | 'kran' | 'vejtromle' | 'pael' | 'taarnkran';
+export type MachineId =
+  | 'gravko' | 'lastbil' | 'betonbil' | 'kran' | 'vejtromle' | 'pael' | 'taarnkran'
+  | 'bulldozer' | 'laesser' | 'nedriv' | 'asfalt' | 'lift';
 
 /** Also the order of the workshop's bays, and part of the save format: append, never reorder. */
-export const MACHINE_IDS: MachineId[] = ['gravko', 'lastbil', 'betonbil', 'kran', 'vejtromle', 'pael', 'taarnkran'];
+export const MACHINE_IDS: MachineId[] = [
+  'gravko', 'lastbil', 'betonbil', 'kran', 'vejtromle', 'pael', 'taarnkran',
+  'bulldozer', 'laesser', 'nedriv', 'asfalt', 'lift',
+];
 
 /**
  * One part. Parts go on in any order — a five-year-old should not have to work out that
@@ -149,6 +157,76 @@ export const MACHINES: Record<MachineId, MachineDef> = {
     ],
     // Flags on a crane are the Danish topping-out, the rejsegilde, in miniature.
     extra: { title: 'Hejs flagene', kind: 'flag', done: 'Hejst' },
+  },
+  bulldozer: {
+    id: 'bulldozer',
+    name: 'Bulldozeren',
+    short: 'Bulldozer',
+    job: 'skubber jorden flad',
+    parts: [
+      { id: 'baelter', name: 'Bælter' },
+      { id: 'krop', name: 'Krop' },
+      { id: 'motor', name: 'Motor' },
+      { id: 'hus', name: 'Førerhus' },
+      { id: 'skraber', name: 'Skraber' },
+    ],
+    extra: { title: 'Vask bulldozeren', kind: 'mud', done: 'Ren' },
+  },
+  laesser: {
+    id: 'laesser',
+    name: 'Læssemaskinen',
+    short: 'Læssemaskine',
+    job: 'samler sten op',
+    parts: [
+      { id: 'hjul', name: 'Hjul' },
+      { id: 'ramme', name: 'Ramme' },
+      { id: 'hus', name: 'Førerhus' },
+      { id: 'arm', name: 'Løftearm' },
+      { id: 'skovl', name: 'Skovl' },
+    ],
+    extra: { title: 'Smør armen', kind: 'grease', done: 'Smurt' },
+  },
+  nedriv: {
+    id: 'nedriv',
+    name: 'Nedrivningskranen',
+    short: 'Nedrivning',
+    job: 'river det gamle skur ned',
+    parts: [
+      { id: 'baelter', name: 'Bælter' },
+      { id: 'krop', name: 'Krop' },
+      { id: 'hus', name: 'Førerhus' },
+      { id: 'bom', name: 'Kranarm' },
+      { id: 'kugle', name: 'Kugle' },
+    ],
+    extra: { title: 'Spænd kæden', kind: 'bolt', done: 'Spændt' },
+  },
+  asfalt: {
+    id: 'asfalt',
+    name: 'Asfaltmaskinen',
+    short: 'Asfaltmaskine',
+    job: 'lægger asfalt',
+    parts: [
+      { id: 'baelter', name: 'Bælter' },
+      { id: 'krop', name: 'Krop' },
+      { id: 'tragt', name: 'Tragt' },
+      { id: 'hus', name: 'Førersæde' },
+      { id: 'glatter', name: 'Glattebjælke' },
+    ],
+    extra: { title: 'Tænd varmen', kind: 'lamp', done: 'Tændt' },
+  },
+  lift: {
+    id: 'lift',
+    name: 'Liftbilen',
+    short: 'Liftbil',
+    job: 'sætter vinduerne i',
+    parts: [
+      { id: 'hjul', name: 'Hjul' },
+      { id: 'ramme', name: 'Ramme' },
+      { id: 'hus', name: 'Førerhus' },
+      { id: 'arm', name: 'Liftarm' },
+      { id: 'kurv', name: 'Kurv' },
+    ],
+    extra: { title: 'Pump dækkene', kind: 'tyre', done: 'Pumpet' },
   },
 };
 

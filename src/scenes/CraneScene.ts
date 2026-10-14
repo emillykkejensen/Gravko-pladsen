@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { COLORS, PAINT, SIZE } from '../config';
+import { BUTTON_FLOOR, COLORS, PAINT, SIZE } from '../config';
 import { gameState } from '../state/GameState';
+import { windowSpots } from '../state/Projects';
 import { addBackButton, addSceneTitle, addStarCounter, award } from '../ui/Chrome';
 import { button, caption, shade, tappable } from '../helpers/Draw';
 import { dur, popIn, reduceMotion } from '../helpers/Motion';
@@ -8,9 +9,8 @@ import { audio } from '../helpers/Audio';
 import { showConfetti, showPraise, showRing, showSparkle } from '../objects/FeedbackEffects';
 import { HOOK_DROP, JIB_END, JIB_Y, Pt, TOWER_HOOK_REST, drawMachine } from '../objects/MachineArt';
 import {
-  CELL_W, FLOOR_H, GRAVEL_DEPTH, SLAB_H, drawBuilding, drawBuildingFrame, drawFoundation,
-  drawFrame, drawGravelLayer, drawGround, drawHole, drawPilesUnder, drawRoofFrame, groundY, holeFor,
-  roofHeight, siteSky, siteWeather,
+  CELL_W, FLOOR_H, GRAVEL_DEPTH, SLAB_H, drawBuilding, drawBuildingFrame, drawFinishedSlab,
+  drawFrame, drawGround, drawRoofFrame, drawWindow, groundY, holeFor, roofHeight, siteSky, siteWeather, windowAt,
 } from '../objects/SiteArt';
 import { Pointer, drawTargetZone, hintBanner } from '../ui/Guide';
 import { BaseScene } from './BaseScene';
@@ -119,26 +119,54 @@ export class CraneScene extends BaseScene {
     return gameState.currentProject.floors + 1 - gameState.site.placed;
   }
 
-  /** Where the next piece sits, on top of the stack. */
+  /**
+   * How many pieces go up in this lift: one, or with a stronger hook two or four at once,
+   * stacked on top of each other.
+   */
+  private get count(): number {
+    return gameState.liftCount;
+  }
+
+  /** Where the next lift sits, on top of the stack. */
   private pileTop(): Pt {
-    return { x: this.pileX, y: this.gy - 34 - Math.max(0, this.left - 1) * 12 };
+    const under = Math.max(0, this.left - this.count);
+    return { x: this.pileX, y: this.gy - 12 - under * 12 - (this.pieceHeight() / 2) * PILE_SCALE };
   }
 
-  /** Middle of where the next frame (or the roof) goes. */
+  /** Middle of where the next lift goes: from the top of what stands to the top of the stack. */
   private slot(): Pt {
-    const p = gameState.currentProject;
     const n = gameState.site.placed;
-    if (n < p.floors) return { x: this.holeCX, y: this.base - n * FLOOR_H - FLOOR_H / 2 };
-    return { x: this.holeCX, y: this.base - p.floors * FLOOR_H - roofHeight(p.roof, this.width) / 2 };
+    const bottom = this.base - Math.min(n, gameState.currentProject.floors) * FLOOR_H;
+    return { x: this.holeCX, y: bottom - this.pieceHeight() / 2 };
   }
 
+  /** Whether the lift is only the roof. */
   private nextIsRoof(): boolean {
     return gameState.site.placed >= gameState.currentProject.floors;
   }
 
-  /** Height of the piece being lifted, so the hook sits on its top. */
+  /** Height of the pieces being lifted together, so the hook sits on their top. */
   private pieceHeight(): number {
-    return this.nextIsRoof() ? roofHeight(gameState.currentProject.roof, this.width) : FLOOR_H;
+    const p = gameState.currentProject;
+    const first = gameState.site.placed;
+    let h = 0;
+    for (let i = first; i < first + this.count; i++) h += i < p.floors ? FLOOR_H : roofHeight(p.roof, this.width);
+    return h;
+  }
+
+  /** The pieces of one lift, drawn stacked with their middle on the origin. */
+  private drawLoad(g: Phaser.GameObjects.Graphics): void {
+    const p = gameState.currentProject;
+    const first = gameState.site.placed;
+    let bottom = this.pieceHeight() / 2;
+    for (let i = first; i < first + this.count; i++) {
+      if (i < p.floors) {
+        drawFrame(g, -this.width / 2, bottom, this.width);
+        bottom -= FLOOR_H;
+      } else {
+        drawRoofFrame(g, -this.width / 2, bottom, this.width, p.roof);
+      }
+    }
   }
 
   protected buildBackground(): void {
@@ -146,18 +174,7 @@ export class CraneScene extends BaseScene {
     siteSky(this, o => this.bg(o));
     const g = this.add.graphics();
     drawGround(g, width, height, this.gy);
-    const hole = this.hole;
-    drawHole(g, hole);
-    drawPilesUnder(g, hole, gameState.currentProject.piles);
-    drawGravelLayer(g, hole, GRAVEL_DEPTH);
-    drawFoundation(g, hole.x + 12, this.base, Array(gameState.currentProject.pourCells).fill(1), 1, false);
-    // earth backfilled against the slab's ends, now the formwork is gone
-    g.fillStyle(COLORS.dirt);
-    g.fillRect(hole.x, hole.y - 6, 12, SLAB_H + 6);
-    g.fillRect(hole.x + hole.w - 12, hole.y - 6, 12, SLAB_H + 6);
-    g.fillStyle(COLORS.grass);
-    g.fillRect(hole.x, hole.y - 6, 12, 6);
-    g.fillRect(hole.x + hole.w - 12, hole.y - 6, 12, 6);
+    drawFinishedSlab(g, this.hole, gameState.currentProject);
     // a pallet for the steel
     g.fillStyle(COLORS.wood);
     g.fillRect(this.pileX - 70, this.gy - 10, 140, 10);
@@ -188,9 +205,9 @@ export class CraneScene extends BaseScene {
     const frame = this.dyn(this.add.graphics().setPosition(this.holeCX, this.base));
     drawBuildingFrame(frame, p, gameState.site.placed);
 
-    // the stack of steel still to lift, the next piece on top
+    // the stack of steel still to lift, the next lift on top
     const stack = this.dyn(this.add.graphics());
-    for (let i = 0; i < this.left - 1; i++) {
+    for (let i = 0; i < this.left - this.count; i++) {
       stack.fillStyle(COLORS.beamDeep);
       stack.fillRoundedRect(this.pileX - 60, this.gy - 22 - i * 12, 120, 10, 3);
       stack.lineStyle(2, COLORS.outline);
@@ -201,13 +218,12 @@ export class CraneScene extends BaseScene {
 
     this.dyn(caption(this, this.scale.width - 120, 96, `${gameState.site.placed} af ${p.floors + 1}`));
     this.dyn(hintBanner(this, this.scale.width / 2 - 20, 96,
-      this.nextIsRoof() ? 'Løft taget op på huset' : 'Træk stålet hen på huset'));
+      this.nextIsRoof() ? 'Løft taget op på huset' : this.count > 1 ? `Løft ${this.count} på én gang!` : 'Træk stålet hen på huset'));
 
     const crane = this.dyn(this.add.graphics().setPosition(this.craneX, this.gy).setScale(this.S));
     const load = this.dyn(this.add.container(pileTop.x, pileTop.y)).setName('piece').setScale(PILE_SCALE);
     const lg = this.add.graphics();
-    if (this.nextIsRoof()) drawRoofFrame(lg, -this.width / 2, this.pieceHeight() / 2, this.width, p.roof);
-    else drawFrame(lg, -this.width / 2, FLOOR_H / 2, this.width);
+    this.drawLoad(lg);
     load.add(lg);
     load.setSize(this.width + 20, this.pieceHeight() + 20).setInteractive({ useHandCursor: true });
     load.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
@@ -307,14 +323,12 @@ export class CraneScene extends BaseScene {
       audio.clank();
       showSparkle(this, slot.x, slot.y, this.width, 50);
       showRing(this, slot.x, slot.y, COLORS.beam);
-      award(this, 1, slot.x, slot.y);
       if (gameState.frameDone) {
         gameState.completeStage();
         this.time.delayedCall(dur(250), () => {
           audio.horn();
           showConfetti(this, this.holeCX, 220 + this.dy, 36);
           showPraise(this, this.holeCX, 200 + this.dy, 'Skelettet står!');
-          award(this, 3, this.holeCX, 260 + this.dy);
         });
       }
       this.refresh();
@@ -334,7 +348,7 @@ export class CraneScene extends BaseScene {
 
   /** Where the "Flyt ind!" button goes: bottom right, clear of the paint pots. */
   private get goAt(): Pt {
-    return { x: this.scale.width - 130, y: this.scale.height - 50 };
+    return { x: this.scale.width - 130, y: this.scale.height - BUTTON_FLOOR };
   }
 
   private buildPainting(): void {
@@ -349,8 +363,18 @@ export class CraneScene extends BaseScene {
     }
 
     const house = this.dyn(this.add.graphics().setPosition(this.holeCX, this.base));
-    if (this.paint === null) drawBuildingFrame(house, p, p.floors + 1, false);
-    else drawBuilding(house, p, this.paint);
+    if (this.paint === null) {
+      drawBuildingFrame(house, p, p.floors + 1, false);
+      // the windows the lift truck put in
+      if (p.stages.includes('vinduer')) {
+        for (const spot of windowSpots(p)) {
+          const at = windowAt(p, spot.floor, spot.slot);
+          drawWindow(house, at.x, at.y);
+        }
+      }
+    } else {
+      drawBuilding(house, p, this.paint);
+    }
 
     this.dyn(hintBanner(this, this.scale.width / 2 - 20, 96,
       this.paint === null ? 'Vælg en farve til huset' : 'Flot! Tryk på Flyt ind!'));
@@ -358,7 +382,7 @@ export class CraneScene extends BaseScene {
     // paint pots along the bottom: the first six, and any bought in the star shop
     const pots = PAINT.map((_, i) => i).filter(i => gameState.hasPaint(i));
     const step = Math.min(74, (this.goAt.x - 120 - 50) / Math.max(1, pots.length - 1));
-    const potY = this.scale.height - 50;
+    const potY = this.scale.height - BUTTON_FLOOR;
     pots.forEach((index, i) => {
       const paint = PAINT[index];
       const x = 50 + i * step;
@@ -410,13 +434,19 @@ export class CraneScene extends BaseScene {
     this.everyFrame(() => pointer.tick());
   }
 
+  /**
+   * The building moves into the town — and this is the one place stars are earned: as many as
+   * the building is worth, the bigger the more.
+   */
   private moveIn(): void {
     if (this.paint === null) return;
+    const stars = gameState.currentProject.stars;
     const plot = gameState.paint(this.paint);
     if (plot < 0) return;
     audio.horn();
     showConfetti(this, this.holeCX, 220 + this.dy, 40);
-    award(this, 5, this.holeCX, this.base - 80);
+    showPraise(this, this.holeCX, 190 + this.dy, `+${stars} stjerner!`);
+    award(this, stars, this.holeCX, this.base - 80);
     this.time.delayedCall(dur(900), () => this.goTo('TownScene', { arrived: plot }));
   }
 }

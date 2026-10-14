@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { Game, readySave } from './game';
+import { Game, MACHINE_IDS, readyMachine, readySave, townOf } from './game';
 
 /**
  * The star shop: what stars are for.
@@ -13,26 +13,26 @@ test('buying something spends the stars, keeps the rank, and it turns up in the 
   const game = await Game.openWithSave(page, { stars: 20, earned: 50 });
   await game.start();
   await game.expectScreenText('TownScene').toContain('Stjernebutik');
-  expect(await game.find('TownScene', 'deco:bus')).toBeNull();
+  expect(await game.find('TownScene', 'deco:moelle')).toBeNull();
 
   await game.tapNamed('TownScene', 'shop');
   await game.waitForScene('ShopScene');
-  await game.tapNamed('ShopScene', 'item:bus');
+  await game.tapNamed('ShopScene', 'item:moelle');
 
   const s = await game.state();
-  expect(s.stars, 'the bus cost twelve').toBe(8);
+  expect(s.stars, 'the wind turbine cost fourteen').toBe(6);
   expect(s.earned, 'but nothing earned is taken back').toBe(50);
-  expect(s.owned).toEqual(['bus']);
+  expect(s.owned).toEqual(['moelle']);
   await game.expectScreenText('ShopScene').toContain('Købt');
-  await game.expectScreenText('ShopScene', 'the rank is the same as before').toContain('Formand');
-  expect((await game.save()).owned).toEqual(['bus']);
+  await game.expectScreenText('ShopScene', 'the rank is the same as before').toContain('Byggeleder');
+  expect((await game.save()).owned).toEqual(['moelle']);
 
   // tapping it again buys nothing twice
-  await game.tapNamed('ShopScene', 'item:bus');
-  expect((await game.state()).stars).toBe(8);
+  await game.tapNamed('ShopScene', 'item:moelle');
+  expect((await game.state()).stars).toBe(6);
 
   await game.goTo('TownScene');
-  await game.mustFind('TownScene', 'deco:bus');
+  await game.mustFind('TownScene', 'deco:moelle');
   game.expectNoErrors();
 });
 
@@ -91,8 +91,55 @@ test('a bought house colour joins the paint pots', async ({ page }) => {
   game.expectNoErrors();
 });
 
+test('a vehicle waits for its building, and then it can be bought', async ({ page }) => {
+  const game = await Game.openWithSave(page, { stars: 30, town: townOf(4) });
+  await game.goTo('ShopScene');
+  await game.tapNamed('ShopScene', 'tab:biler');
+  await game.expectScreenText('ShopScene', 'the bus asks for its station').toContain('Byg busstationen');
+  await game.tapNamed('ShopScene', 'item:bus');
+  expect((await game.state()).owned, 'no bus without a bus station').toEqual([]);
+  expect(await page.evaluate(() => window.__state.buy('bus'))).toBe(false);
+  expect((await game.state()).stars).toBe(30);
+
+  // the bus station moves into the town
+  await page.evaluate(() => window.__state.town.push({ project: 4, color: 0 }));
+  await game.goTo('ShopScene');
+  await game.tapNamed('ShopScene', 'tab:biler');
+  await game.tapNamed('ShopScene', 'item:bus');
+  await game.expectState(st => st.owned).toEqual(['bus']);
+  expect(await page.evaluate(() => window.__state.buy('brandbil')), 'the fire engine still waits').toBe(false);
+  await game.goTo('TownScene');
+  await game.mustFind('TownScene', 'deco:bus');
+  game.expectNoErrors();
+});
+
+test('an upgrade waits for its machine, and comes in order', async ({ page }) => {
+  const game = await Game.openWithSave(page, { stars: 30, machines: { gravko: readyMachine('gravko') } });
+  const buy = (id: string) => page.evaluate((i) => window.__state.buy(i), id);
+  expect(await buy('op-lastbil-1'), 'not for a machine that is not built').toBe(false);
+  expect(await buy('op-gravko-2'), 'not the second before the first').toBe(false);
+
+  await game.goTo('ShopScene');
+  await game.tapNamed('ShopScene', 'tab:opgrader');
+  await game.tapNamed('ShopScene', 'item:op-gravko-1');
+  await game.expectState(st => st.owned).toEqual(['op-gravko-1']);
+  expect((await game.state()).stars, 'the first upgrade costs five').toBe(25);
+  // the card now offers the next one
+  await game.mustFind('ShopScene', 'item:op-gravko-2');
+  await game.tapNamed('ShopScene', 'item:op-gravko-2');
+  await game.expectState(st => st.owned).toEqual(['op-gravko-1', 'op-gravko-2']);
+  expect(await page.evaluate(() => window.__state.capacity('gravko'))).toBe(4);
+  game.expectNoErrors();
+});
+
 test('everything in the shop can be bought, and the town still draws with all of it', async ({ page }) => {
-  const game = await Game.openWithSave(page, { stars: 1000 });
+  // the whole town built, and every machine, so nothing is waiting for anything
+  const game = await Game.openWithSave(page, {
+    stars: 1000,
+    town: townOf(9),
+    project: 9,
+    machines: Object.fromEntries(MACHINE_IDS.map(id => [id, readyMachine(id)])),
+  });
   const ids: string[] = await page.evaluate(async (url) => {
     const shop: any = await import(/* @vite-ignore */ url);
     return shop.SHOP_ITEMS.map((i: { id: string }) => i.id);
@@ -104,8 +151,11 @@ test('everything in the shop can be bought, and the town still draws with all of
   const spent = 1000 - (await game.state()).stars;
   expect(spent).toBeGreaterThan(200);
   await game.goTo('TownScene');
-  for (const id of ['bus', 'ballon', 'moelle']) await game.mustFind('TownScene', `deco:${id}`);
+  for (const id of ['bus', 'ballon', 'moelle', 'brandbil', 'politibil', 'ambulance', 'tog', 'helikopter']) {
+    await game.mustFind('TownScene', `deco:${id}`);
+  }
   await game.goTo('ShopScene');
-  await game.expectScreenText('ShopScene').toContain('8/8');
+  await game.expectScreenText('ShopScene').toContain('7/7');
+  await game.expectScreenText('ShopScene').toContain('24/24');
   game.expectNoErrors();
 });
