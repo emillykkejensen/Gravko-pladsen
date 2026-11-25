@@ -79,6 +79,8 @@ test('a house further down the road finds the same thing again, without counting
   }));
   const found = await page.evaluate(() => {
     const s = window.__state;
+    // the houses after the hospital borrow a job, which may come before the digging
+    s.site.stage = s.currentProject.stages.indexOf('grav');
     const chunk = s.treasureChunk;
     const other = (chunk + 1) % (s.currentProject.holeCols * s.currentProject.holeRows);
     return { miss: s.unearth([other]), hit: s.unearth([chunk]), treasures: s.treasures, fresh: s.newTreasures };
@@ -155,9 +157,11 @@ test('the town has people: one for each building, and they say hello', async ({ 
   await game.tap(person.x, person.y - 12);
   expect(await game.activeScenes(), 'a hello, not a trip somewhere').toContain('TownScene');
 
-  // a knock on a finished building: someone comes to the door to welcome you
+  // a knock on a finished building: someone comes to the door to welcome you. Pressed and let
+  // go without waiting for the town to settle, which would wait for the bubble to fade away.
   const plot = await onScreen(game, 'person:2');
-  await game.tap(plot.x + 44, plot.y - 70);
+  await game.down(plot.x + 44, plot.y - 70);
+  await game.up();
   await game.expectScreenText('TownScene').toContain('Velkommen til butikken!');
   game.expectNoErrors();
 });
