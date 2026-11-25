@@ -390,6 +390,47 @@ class Audio {
   winch(): void {
     this.note(140, 0, 0.3, 0.05, 'sawtooth', 210);
   }
+
+  /* ---------------------------------------------------------- treasure and people --- */
+
+  /**
+   * Something dug up: a glittering climb up a pentatonic scale with a bell on the top note —
+   * a "look!" rather than the "done!" of `success`.
+   */
+  treasure(): void {
+    [659.3, 784, 880, 1046.5, 1318.5, 1568].forEach((f, i) => this.note(f, i * 0.06, 0.32, 0.08, 'triangle'));
+    this.note(2093, 0.38, 1.2, 0.08, 'sine');
+    this.note(3136, 0.38, 0.7, 0.03, 'sine');
+    this.noise(0.36, 0.3, 0.035, 'highpass', 6000, 9000);
+  }
+
+  /** A little glint in the earth as the bucket passes near it. */
+  twinkle(): void {
+    this.note(2637, 0, 0.18, 0.035, 'sine');
+    this.note(3520, 0.05, 0.16, 0.025, 'sine');
+  }
+
+  /**
+   * Somebody saying hello: a two-note "hej!" whose pitch moves a little each time, so a
+   * crowd of townspeople does not sound like one recording.
+   */
+  hello(): void {
+    const base = 560 + Math.random() * 260;
+    this.note(base, 0, 0.1, 0.07, 'triangle', base * 1.25);
+    this.note(base * 1.25, 0.11, 0.16, 0.07, 'triangle', base * 1.05);
+  }
+
+  /** A door opening and footsteps going in. */
+  door(): void {
+    this.note(330, 0, 0.12, 0.05, 'sine', 420);
+    for (let i = 0; i < 3; i++) this.noise(0.15 + i * 0.13, 0.04, 0.05, 'lowpass', 900);
+  }
+
+  /** The foreman's whistle: up and down, the sound of "well done, team". */
+  whistle(): void {
+    this.note(1400, 0, 0.16, 0.05, 'sine', 2100);
+    this.note(2100, 0.2, 0.3, 0.05, 'sine', 1500);
+  }
 }
 
 export const audio = new Audio();

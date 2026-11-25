@@ -4,6 +4,8 @@ import { button } from '../helpers/Draw';
 import { popIn } from '../helpers/Motion';
 import { nextRoute } from '../helpers/Route';
 import { transition } from '../helpers/Motion';
+import { gameState } from '../state/GameState';
+import { STAGE_TALK, foremanSays } from './Foreman';
 
 /**
  * The button a finished stage leaves behind. It goes straight to the next thing to do —
@@ -23,5 +25,14 @@ export function stageDoneButton(
   go.setName('go');
   add(go);
   popIn(scene, go, 200, 0.5);
+
+  // The foreman comes to say well done, and what the job was for. The stage just finished is
+  // the one before the site's current one: the scene has already moved the site on.
+  const done = gameState.stages[gameState.site.stage - 1];
+  const talk = done && STAGE_TALK[done.id];
+  if (talk) {
+    const fx = Math.max(60, x - 190);
+    foremanSays(scene, add, fx, y + 34, talk, undefined, { lean: Math.min(60, fx - 40) - 30 });
+  }
   return go;
 }

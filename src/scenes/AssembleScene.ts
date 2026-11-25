@@ -10,6 +10,7 @@ import { showConfetti, showPraise, showRing, showSparkle } from '../objects/Feed
 import { ART, drawMachine, drawMachineProgress, machineBounds, partGraphic } from '../objects/MachineArt';
 import { floorY, workshopBackdrop } from '../objects/SiteArt';
 import { Pointer, drawTargetZone, hintBanner } from '../ui/Guide';
+import { foremanSays } from '../ui/Foreman';
 import { BaseScene } from './BaseScene';
 
 /**
@@ -245,5 +246,9 @@ export class AssembleScene extends BaseScene {
     this.dyn(go);
     popIn(this, go, 300, 0.5);
     go.setDepth(DEPTH.dynamic);
+
+    // the foreman, by the tool board, with something true about the real machine
+    foremanSays(this, o => this.dyn(o), 80 + this.dx, Math.min(this.pileY, this.scale.height - BUTTON_FLOOR) + 40,
+      MACHINES[this.machine].fact, 'Vidste du?', { width: 270, lean: 92, delay: 900 });
   }
 }

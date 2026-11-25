@@ -3,9 +3,10 @@ import { COLORS } from '../config';
 import { gameState } from '../state/GameState';
 import { addBackButton, addSceneTitle, addStarCounter } from '../ui/Chrome';
 import { caption } from '../helpers/Draw';
-import { dur } from '../helpers/Motion';
+import { dur, reduceMotion } from '../helpers/Motion';
 import { audio } from '../helpers/Audio';
 import { showConfetti, showPraise } from '../objects/FeedbackEffects';
+import { FindCard, showFind } from '../objects/FindCard';
 import { ArmPose, GRAVKO_REST, Pt, drawMachine, grown } from '../objects/MachineArt';
 import { drawGround, drawHole, drawPilesUnder, groundY, holeFor, siteSky, siteWeather } from '../objects/SiteArt';
 import { stageDoneButton } from '../ui/StageDone';
@@ -49,6 +50,8 @@ export class DigScene extends BaseScene {
   private carried = 0;
   private bucket = 0.2;
   private finished = false;
+  /** The card showing what was just dug up, until the child digs on. */
+  private find: FindCard | null = null;
 
   constructor() {
     super({ key: 'DigScene' });
@@ -61,6 +64,7 @@ export class DigScene extends BaseScene {
     this.carried = 0;
     this.bucket = 0.2;
     this.finished = false;
+    this.find = null;
   }
 
   create(): void {
@@ -74,6 +78,10 @@ export class DigScene extends BaseScene {
       if (!p.isDown || this.finished) return;
       this.steer(p.x, p.y);
     };
+    // a new touch after the find has had a moment on screen puts it away in the chest
+    this.input.on('pointerdown', () => {
+      if (this.find?.settled()) this.closeFind();
+    });
     this.input.on('pointerdown', steer);
     this.input.on('pointermove', steer);
   }
@@ -164,6 +172,37 @@ export class DigScene extends BaseScene {
     };
     drawEarth();
 
+    // Something glints down in the earth where this building's find is buried: a reason to
+    // dig there, and the promise that there is something to find at all.
+    const glint = this.dyn(this.add.graphics());
+    const drawGlint = () => {
+      glint.clear();
+      const chunk = gameState.treasureChunk;
+      if (chunk < 0) return;
+      const col = Math.floor(chunk / p.holeRows);
+      const layer = chunk % p.holeRows;
+      const x = hole.x + (col + 0.5) * CHUNK_W + 6;
+      const y = hole.y + (layer + 0.5) * CHUNK_H;
+      const t = this.time.now / 1000;
+      const k = reduceMotion() ? 0.8 : 0.55 + 0.45 * Math.abs(Math.sin(t * 2.2));
+      glint.fillStyle(COLORS.sun, 0.35 * k);
+      glint.fillCircle(x, y, 17 * k);
+      const r = 14 * k;
+      glint.fillStyle(COLORS.white, 0.95);
+      glint.fillPoints([
+        { x, y: y - r }, { x: x + r * 0.22, y: y - r * 0.22 }, { x: x + r, y }, { x: x + r * 0.22, y: y + r * 0.22 },
+        { x, y: y + r }, { x: x - r * 0.22, y: y + r * 0.22 }, { x: x - r, y }, { x: x - r * 0.22, y: y - r * 0.22 },
+      ], true);
+      glint.fillStyle(COLORS.sun);
+      glint.fillCircle(x, y, 2.4);
+      // a second, smaller sparkle off to one side, on its own beat
+      const k2 = reduceMotion() ? 0 : Math.max(0, Math.sin(t * 3.1 + 1.3));
+      if (k2 > 0.1) {
+        glint.fillStyle(COLORS.white, 0.9 * k2);
+        glint.fillCircle(x - 12, y - 8, 2.5 * k2);
+      }
+    };
+
     // The heap grows with every bucket tipped on it. It sits on the grass, a mound and not a
     // ball half sunk into the ground: a dome whose flat bottom is the top of the grass.
     const heap = this.dyn(this.add.graphics());
@@ -245,6 +284,7 @@ export class DigScene extends BaseScene {
       upper.clear();
       drawMachine(upper, 'gravko', ['bom', 'arm', 'skovl', 'krop', 'hus'], { arm: pose });
 
+      drawGlint();
       zone.clear();
       if (this.finished) {
         pointer.hide();
@@ -271,6 +311,10 @@ export class DigScene extends BaseScene {
           drawEarth();
           updateProgress();
           setHint();
+          // the one before is put away as soon as the digging goes on
+          if (this.find) this.closeFind();
+          const found = gameState.unearth(got);
+          if (found) this.find = showFind(this, found.treasure, found.fresh, tip, { x: 630 + this.dx, y: 214 + this.dy });
         }
       } else if (tip.x < this.dumpRight && tip.y < this.gy - 6) {
         this.carried = 0;
@@ -361,6 +405,12 @@ export class DigScene extends BaseScene {
         onComplete: () => c.destroy(),
       });
     }
+  }
+
+  /** Puts the find card away into the chest. */
+  private closeFind(): void {
+    this.find?.close();
+    this.find = null;
   }
 
   private finish(): void {

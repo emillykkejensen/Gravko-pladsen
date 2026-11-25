@@ -54,6 +54,8 @@ export interface MachineDef {
   job: string;
   parts: PartDef[];
   extra: ExtraJob;
+  /** "Vidste du?" — one true thing about the real machine, told when it is built. */
+  fact: string;
 }
 
 export const MACHINES: Record<MachineId, MachineDef> = {
@@ -71,6 +73,7 @@ export const MACHINES: Record<MachineId, MachineDef> = {
       { id: 'skovl', name: 'Skovl' },
     ],
     extra: { title: 'Smør leddene', kind: 'grease', done: 'Smurt' },
+    fact: 'En gravko har tænder på skovlen, så den kan bide sig ned i hård jord.',
   },
   lastbil: {
     id: 'lastbil',
@@ -84,6 +87,7 @@ export const MACHINES: Record<MachineId, MachineDef> = {
       { id: 'lad', name: 'Lad' },
     ],
     extra: { title: 'Pump dækkene', kind: 'tyre', done: 'Pumpet' },
+    fact: 'Lastbilens lad kan vippe op, så gruset glider af helt af sig selv.',
   },
   betonbil: {
     id: 'betonbil',
@@ -98,6 +102,7 @@ export const MACHINES: Record<MachineId, MachineDef> = {
       { id: 'rende', name: 'Rende' },
     ],
     extra: { title: 'Vask tromlen', kind: 'mud', done: 'Ren' },
+    fact: 'Tromlen drejer hele vejen, så betonen ikke når at blive hård, før den er fremme.',
   },
   kran: {
     id: 'kran',
@@ -113,6 +118,7 @@ export const MACHINES: Record<MachineId, MachineDef> = {
       { id: 'krog', name: 'Krog' },
     ],
     extra: { title: 'Spænd boltene', kind: 'bolt', done: 'Spændt' },
+    fact: 'Kranbilen sætter støtteben ud, så den ikke vælter, når den løfter noget tungt.',
   },
   vejtromle: {
     id: 'vejtromle',
@@ -127,6 +133,7 @@ export const MACHINES: Record<MachineId, MachineDef> = {
       { id: 'hus', name: 'Førerhus' },
     ],
     extra: { title: 'Sprøjt vand på', kind: 'water', done: 'Våd' },
+    fact: 'Vejtromlen er så tung, at den trykker gruset helt fast.',
   },
   pael: {
     id: 'pael',
@@ -141,6 +148,7 @@ export const MACHINES: Record<MachineId, MachineDef> = {
       { id: 'lod', name: 'Faldlod' },
     ],
     extra: { title: 'Tænd lygterne', kind: 'lamp', done: 'Tændt' },
+    fact: 'Pæle står dybt nede i jorden og holder huset, hvor jorden er blød.',
   },
   taarnkran: {
     id: 'taarnkran',
@@ -157,6 +165,7 @@ export const MACHINES: Record<MachineId, MachineDef> = {
     ],
     // Flags on a crane are the Danish topping-out, the rejsegilde, in miniature.
     extra: { title: 'Hejs flagene', kind: 'flag', done: 'Hejst' },
+    fact: 'Tårnkranen har en tung kontravægt bag på armen, så den ikke tipper.',
   },
   bulldozer: {
     id: 'bulldozer',
@@ -171,6 +180,7 @@ export const MACHINES: Record<MachineId, MachineDef> = {
       { id: 'skraber', name: 'Skraber' },
     ],
     extra: { title: 'Vask bulldozeren', kind: 'mud', done: 'Ren' },
+    fact: 'Bulldozeren kører på bælter, så den ikke synker ned i mudder.',
   },
   laesser: {
     id: 'laesser',
@@ -185,6 +195,7 @@ export const MACHINES: Record<MachineId, MachineDef> = {
       { id: 'skovl', name: 'Skovl' },
     ],
     extra: { title: 'Smør armen', kind: 'grease', done: 'Smurt' },
+    fact: 'Læssemaskinen kan løfte skovlen højt op og tømme den ned i en lastbil.',
   },
   nedriv: {
     id: 'nedriv',
@@ -199,6 +210,7 @@ export const MACHINES: Record<MachineId, MachineDef> = {
       { id: 'kugle', name: 'Kugle' },
     ],
     extra: { title: 'Spænd kæden', kind: 'bolt', done: 'Spændt' },
+    fact: 'Nedrivningskuglen er af massivt stål og kan veje lige så meget som en bil.',
   },
   asfalt: {
     id: 'asfalt',
@@ -213,6 +225,7 @@ export const MACHINES: Record<MachineId, MachineDef> = {
       { id: 'glatter', name: 'Glattebjælke' },
     ],
     extra: { title: 'Tænd varmen', kind: 'lamp', done: 'Tændt' },
+    fact: 'Asfalten er over 100 grader varm, når den kommer ud af maskinen!',
   },
   lift: {
     id: 'lift',
@@ -227,6 +240,7 @@ export const MACHINES: Record<MachineId, MachineDef> = {
       { id: 'kurv', name: 'Kurv' },
     ],
     extra: { title: 'Pump dækkene', kind: 'tyre', done: 'Pumpet' },
+    fact: 'Liftbilens kurv kan løfte folk højt op, så de kan arbejde sikkert.',
   },
 };
 

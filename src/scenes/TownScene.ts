@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { COLORS, DEPTH, INK, INK_SOFT, LINE, SIZE, text, textOutlined } from '../config';
 import { gameState } from '../state/GameState';
 import { MACHINE_IDS } from '../state/Machines';
-import { BANGS_PER_PILE, LANDMARKS, PROJECTS, StageId, projectAt, windowSpots } from '../state/Projects';
+import { BANGS_PER_PILE, LANDMARKS, PROJECTS, StageId, doorXs, projectAt, windowSpots } from '../state/Projects';
 import { addBackButton, addStarCounter } from '../ui/Chrome';
 import { playerTag } from '../ui/Players';
 import {
@@ -14,6 +14,8 @@ import { flatten, flattenWide } from '../helpers/Flatten';
 import { nextRoute } from '../helpers/Route';
 import { showConfetti, showPraise, showToast } from '../objects/FeedbackEffects';
 import { drawMachine, drawRock, machineBounds } from '../objects/MachineArt';
+import { drawChest } from '../objects/TreasureArt';
+import { CHILD_SCALE, answerDoor, clothes, greet, moveIn, stroll, townsperson } from '../objects/Townsfolk';
 import {
   CELL_W, SLAB_H, buildingTop, drawBuilding, drawBuildingFrame, drawFoundation, drawGravelLayer, drawPile,
   drawWindow, siteWeather, windowAt,
@@ -63,6 +65,10 @@ export class TownScene extends BaseScene {
   /** Sliding the road: where the finger went down, and the road's place then. */
   private slide: { x: number; scroll: number; moved: boolean; t: number } | null = null;
   private velocity = 0;
+  /** The people out on the pavement, for working out who a tap was meant for. */
+  private folk: Phaser.GameObjects.Container[] = [];
+  /** The plot whose family is walking in this visit, so they are not already out strolling. */
+  private newcomers: number | null = null;
 
   constructor() {
     super({ key: 'TownScene' });
@@ -70,6 +76,7 @@ export class TownScene extends BaseScene {
 
   init(data: { arrived?: number }): void {
     this.arrived = typeof data?.arrived === 'number' ? data.arrived : null;
+    this.newcomers = this.arrived;
     // Once the house has made its entrance it should not make it again if the screen turns.
     if (this.arrived !== null) this.sys.settings.data = {};
     this.slide = null;
@@ -228,6 +235,7 @@ export class TownScene extends BaseScene {
     addStarCounter(this);
     this.addPlayerTag(back);
     this.addShopButton();
+    this.addChestButton();
     this.addGrownUpButton();
   }
 
@@ -246,6 +254,9 @@ export class TownScene extends BaseScene {
     const baked = this.dyn(flatten(this, this.still, DEPTH.dynamic)).setScrollFactor(0);
     this.dynamic.sendToBack(baked);
     for (const rt of road.reverse()) this.dynamic.sendToBack(rt);
+    // the people walk on the pavement: over the road, but behind the workshop and the site
+    this.buildFolk();
+    for (const person of this.folk) this.dynamic.moveBelow(person as Phaser.GameObjects.GameObject, baked);
     this.buildSign();
     this.buildEdges();
   }
@@ -314,6 +325,43 @@ export class TownScene extends BaseScene {
     }
 
     tappable(this, c, w, h + lip, () => transition(this, 'ShopScene'), 'tap');
+  }
+
+  /**
+   * The way into the treasure chest, under the shop: everything dug up so far. Once anything
+   * has been found, a red badge counts the finds not looked at yet, and the chest jiggles.
+   */
+  private addChestButton(): void {
+    const w = 156;
+    const h = 38;
+    const lip = 4;
+    const c = this.add.container(this.scale.width - 90, 150).setDepth(DEPTH.chrome).setName('chest').setScrollFactor(0);
+
+    const g = this.add.graphics();
+    shadow(g, -w / 2, -h / 2, w, h + lip, h / 2, 3, 0.2);
+    plate(g, -w / 2, -h / 2 + lip, w, h, h / 2, shade(COLORS.woodDeep, -0.3), 1, LINE.thin);
+    plate(g, -w / 2, -h / 2, w, h, h / 2, COLORS.woodDeep, 1, LINE.base);
+    sheen(g, -w / 2, -h / 2, w, h, h / 2, 0.25);
+    c.add(g);
+
+    const t = this.add.text(14, 0, 'Skattekisten', text(SIZE.label, '#FFFFFF', 'bold')).setOrigin(0.5);
+    t.setShadow(0, 1.5, 'rgba(74,58,44,0.5)', 0, false, true);
+    c.add(t);
+
+    const fresh = gameState.newTreasures;
+    const chest = this.add.graphics().setPosition(-w / 2 + 26, 1);
+    drawChest(chest, 0.8, fresh > 0);
+    c.add(chest);
+
+    if (fresh > 0) {
+      const dot = badge(this, w / 2 - 6, -h / 2 - 2, `${fresh}`, COLORS.red);
+      c.add(dot);
+      if (!reduceMotion()) {
+        this.tweens.add({ targets: chest, angle: { from: -9, to: 9 }, duration: 260, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+    }
+
+    tappable(this, c, w, h + lip, () => transition(this, 'TreasureScene'), 'tap');
   }
 
   /** Small, quiet, and out of a child's way: this player's settings, for a grown-up. */
@@ -386,6 +434,8 @@ export class TownScene extends BaseScene {
           showConfetti(this, x, plotY - 60, 30);
           audio.horn();
         });
+        // and the people who are going to live there come walking up to the door
+        this.time.delayedCall(700, () => moveIn(this, this.doorX(i), this.feetY, i * 2));
       }
     }
 
@@ -413,16 +463,80 @@ export class TownScene extends BaseScene {
     g.fillCircle(x + 16, y + 7, 4);
   }
 
-  /** A tap on the road, not a slide: a building says what it is, or what it will be. */
+  /* ---------------------------------------------------------------- the people --- */
+
+  /**
+   * Where people's feet are: at the front of the plots, in front of the houses. Any lower and
+   * the workshop's roof, which stands in front of the road, would hide them.
+   */
+  private get feetY(): number {
+    return this.plotY + 12;
+  }
+
+  /** A building's front door, along the road: the middle one if it has more than one. */
+  private doorX(plot: number): number {
+    const doors = doorXs(projectAt(plot));
+    const door = doors.length ? doors[Math.floor(doors.length / 2)] : 0;
+    return this.plotX(plot) + door * PLOT_SCALE;
+  }
+
+  /**
+   * Somebody from each finished building, out on the pavement in front of it, strolling up
+   * and down. Every third one is a child. The same plot always has the same person.
+   */
+  private buildFolk(): void {
+    this.folk = [];
+    for (const b of gameState.town) {
+      // the newest house's people are still on their way
+      if (b.project === this.newcomers) continue;
+      const x = this.plotX(b.project);
+      const child = b.project % 3 === 2;
+      const c = this.dyn(townsperson(this, x, this.feetY, clothes(b.project * 2 + 1), child ? CHILD_SCALE : undefined))
+        .setName(`person:${b.project}`);
+      const span = 40 + (b.project % 3) * 10;
+      const out = b.project % 2 ? 1 : -1;
+      stroll(this, c, x - out * span, x + out * span, 16 + (b.project % 4) * 4, (b.project % 5) * 700);
+      this.folk.push(c);
+    }
+  }
+
+  /** The person a tap at this point on the road is meant for, if any. */
+  private personAt(x: number, y: number): Phaser.GameObjects.Container | null {
+    let best: Phaser.GameObjects.Container | null = null;
+    let bestD = 26;
+    for (const c of this.folk) {
+      if (!c.active || y > c.y + 10 || y < c.y - 48) continue;
+      const d = Math.abs(c.x - x);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * A tap on the road, not a slide: a person says hello; a finished building has someone come
+   * to the door to welcome you in; one still to come says that it is coming.
+   */
   private tapRoad(x: number, y: number): void {
+    const person = this.personAt(x, y);
+    if (person) {
+      greet(this, person);
+      return;
+    }
     const i = Math.round((x - ROAD_START) / PLOT_GAP);
     if (i < 0 || i >= this.plots || Math.abs(x - this.plotX(i)) > 60) return;
     if (y > this.plotY + 20 || y < this.plotY - 140) return;
     const p = projectAt(i);
     const built = !!gameState.buildingAt(i);
     if (!built && i >= LANDMARKS && i !== gameState.project) return;
+    if (built) {
+      answerDoor(this, this.doorX(i), this.feetY, i * 2 + 1, `Velkommen til ${p.definite}!`);
+      return;
+    }
     audio.tap();
-    const label = built ? p.name : i === gameState.project ? `${p.name} bygges nu!` : `${p.name} kommer senere`;
+    const label = i === gameState.project ? `${p.name} bygges nu!` : `${p.name} kommer senere`;
     showToast(this, this.plotX(i), this.plotY - buildingTop(p) * PLOT_SCALE - 30, label);
   }
 
