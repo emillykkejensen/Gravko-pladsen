@@ -24,6 +24,7 @@ import { AsphaltScene } from './scenes/AsphaltScene';
 import { WindowScene } from './scenes/WindowScene';
 import { ShopScene } from './scenes/ShopScene';
 import { SettingsScene } from './scenes/SettingsScene';
+import { TreasureScene } from './scenes/TreasureScene';
 
 // The screen's shape, worked out before the first scene lays anything out.
 const stage = stageSize();
@@ -63,6 +64,7 @@ const config: Phaser.Types.Core.GameConfig = {
     WindowScene,
     ShopScene,
     SettingsScene,
+    TreasureScene,
   ],
 };
 

@@ -56,6 +56,10 @@ const SCREENS: [string, Record<string, unknown>, object?][] = [
   })],
   ['ShopScene', { stars: 40, town: townOf(5), machines: { gravko: readySave().machines.gravko } }],
   ['GarageScene', readySave({}, { project: 17, town: townOf(17) })],
+  ['TreasureScene', {}],
+  ['TreasureScene', { treasures: ['orm', 'rav', 'hestesko', 'kartoffel', 'soepindsvin', 'legetoej', 'floekse', 'muldvarp',
+    'ammonit', 'moent', 'hajtand', 'flaskepost', 'runesten', 'mammut', 'krystal', 'dino', 'guldhorn'], treasuresSeen: 10 }],
+  ['TownScene', readySave({ stage: 0 }, { project: 18, town: townOf(18), treasures: ['orm'] }), { arrived: 17 }],
 ];
 
 SCREENS.forEach(([scene, save, data], i) => {

@@ -8,6 +8,7 @@ import {
   projectAt, projectById, stagesOf, windowSpots,
 } from './Projects';
 import { Profile, findProfile, lastProfileId, migrateLegacySave, saveKeyFor, setLastProfile } from './Profiles';
+import { TreasureDef, treasureById, treasureChunk, treasureFor } from './Treasures';
 import { CAPACITY, DEFAULT_LIVERY, LIVERIES, SHOP_ITEMS, ShopItem, UPGRADES, Upgrade, itemById } from './Shop';
 
 /**
@@ -108,6 +109,10 @@ class GameState {
   owned: string[] = [];
   /** Which coat of paint the machines wear: a LIVERIES id. */
   livery: string = DEFAULT_LIVERY;
+  /** What has been dug up, by TREASURES id, in the order it was found. */
+  treasures: string[] = [];
+  /** How many of `treasures` the child has looked at in the chest: the rest are new. */
+  treasuresSeen = 0;
   /**
    * Whose town this is. Every save, load and reset goes to this player's key.
    *
@@ -361,6 +366,49 @@ class GameState {
   get holeDug(): boolean {
     const { holeCols, holeRows } = this.currentProject;
     return this.site.dug.length >= holeCols * holeRows;
+  }
+
+  /* ---------------------------------------------------------------- treasures --- */
+
+  /**
+   * The chunk of the hole the current building's find is buried in, or -1 when it has been
+   * dug up already (or there is no hole to dig).
+   */
+  get treasureChunk(): number {
+    if (this.stage.id !== 'grav') return -1;
+    const { holeCols, holeRows } = this.currentProject;
+    const chunk = treasureChunk(this.project, holeCols, holeRows);
+    return this.site.dug.includes(chunk) ? -1 : chunk;
+  }
+
+  /**
+   * Called when the bucket has dug `chunks`: the find, if it was in one of them. `fresh` is
+   * true the first time this treasure is found, which is when it goes into the chest; a house
+   * further down the road finds the same things again, as "endnu en".
+   */
+  unearth(chunks: number[]): { treasure: TreasureDef; fresh: boolean } | null {
+    if (this.stage.id !== 'grav') return null;
+    const { holeCols, holeRows } = this.currentProject;
+    if (!chunks.includes(treasureChunk(this.project, holeCols, holeRows))) return null;
+    const treasure = treasureFor(this.project);
+    const fresh = !this.treasures.includes(treasure.id);
+    if (fresh) {
+      this.treasures.push(treasure.id);
+      this.save();
+    }
+    return { treasure, fresh };
+  }
+
+  /** Finds the child has not looked at in the chest yet. */
+  get newTreasures(): number {
+    return Math.max(0, this.treasures.length - this.treasuresSeen);
+  }
+
+  /** The chest has been opened: everything in it has been seen. */
+  seeTreasures(): void {
+    if (this.treasuresSeen === this.treasures.length) return;
+    this.treasuresSeen = this.treasures.length;
+    this.save();
   }
 
   /** Loads one trip of the truck brings: more with a bigger bed, never more than is needed. */
@@ -757,6 +805,8 @@ class GameState {
     this.settings = this.freshSettings();
     this.owned = [];
     this.livery = DEFAULT_LIVERY;
+    this.treasures = [];
+    this.treasuresSeen = 0;
   }
 
   save(): void {
@@ -774,6 +824,8 @@ class GameState {
       settings: this.settings,
       owned: this.owned,
       livery: this.livery,
+      treasures: this.treasures,
+      treasuresSeen: this.treasuresSeen,
     });
 
     try {
@@ -906,6 +958,12 @@ class GameState {
     this.livery = typeof data.livery === 'string' && (data.livery === DEFAULT_LIVERY || this.owned.includes(data.livery))
       ? data.livery
       : DEFAULT_LIVERY;
+
+    // Only finds that still exist, once each; and never more seen than there are.
+    this.treasures = Array.isArray(data.treasures)
+      ? [...new Set((data.treasures as unknown[]).filter((id): id is string => typeof id === 'string' && !!treasureById(id)))]
+      : [];
+    this.treasuresSeen = Math.min(this.treasures.length, count(data.treasuresSeen));
 
     const settings = data.settings ?? {};
     this.settings = {

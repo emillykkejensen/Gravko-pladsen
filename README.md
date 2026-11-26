@@ -20,6 +20,11 @@ machine do more at a time. The town is a long road the child slides along, with 
 building still to come standing faded on its plot. The game fills the whole screen,
 whatever its shape.
 
+The site is not only work: every hole hides something to dig up — a worm, amber, a flint axe,
+a Viking coin, a dinosaur bone, in the end the Golden Horn — which goes into the child's
+treasure chest. The town has people in it, who move into each new house and say hello when
+tapped, and a foreman who turns up when a job is done to say what it was for.
+
 ## How a house gets built
 
 Every building goes through the same core stages, and each needs its own machine. The
@@ -210,6 +215,58 @@ Spending never costs a rank. `GameState` keeps two counts — `stars`, the balan
 last of the town's own buildings, a *Byens helt*. Nothing bought can be lost, and "Start forfra" is the only thing
 that clears it.
 
+### Something to find, somebody to build for
+
+The game was tidy and well-guided, but a child had nothing to discover and nobody to build
+for. Three things put that right, and each one also teaches something.
+
+**A treasure in every hole** (`state/Treasures.ts`, `objects/TreasureArt.ts`,
+`objects/FindCard.ts`). Each building's hole has one find buried in its bottom layer, in a
+column that moves along from one building to the next (`treasureChunk()`). It glints through
+the earth, so there is a reason to dig *there*, and when the bucket brings it up it jumps out
+into a burst of light with its name and one true sentence for a grown-up to read aloud:
+
+| | Find | | Find |
+| --- | --- | --- | --- |
+| 1 | en regnorm | 10 | en vikingemønt |
+| 2 | et stykke rav (with an insect in it) | 11 | en forstenet hajtand |
+| 3 | en gammel hestesko | 12 | en flaskepost |
+| 4 | en kartoffel | 13 | en lille runesten |
+| 5 | et forstenet søpindsvin | 14 | en stødtand fra en mammut |
+| 6 | en gammel legetøjsbil | 15 | en bjergkrystal |
+| 7 | en flintøkse | 16 | en dinosaurknogle |
+| 8 | en muldvarp | 17 | et guldhorn — at the hospital |
+| 9 | en ammonit | | |
+
+Most are things really dug up in Denmark, and the facts are short and true ("I 1639 fandt en
+pige et guldhorn på en mark i Sønderjylland…"). The card never has to be tapped: the next
+bucketful, or a new touch once it has been up for a moment, sends it off to the chest. After
+the hospital the finds come round again as *endnu en …*, and are not counted twice.
+
+`GameState.treasures` lists what has been found and `treasuresSeen` how many the child has
+looked at; the town's **Skattekisten** button, under the star shop, shows a red badge and a
+jiggling chest for the rest. `TreasureScene` is a wooden room with a shelf place for every
+find — question marks for the ones still buried — and the chosen one big, with its fact.
+Finds pay no stars: the find is the reward.
+
+**People in the town** (`objects/Townsfolk.ts`). Every finished building has somebody out in
+front of it, strolling up and down, and every third one is a child. When a building moves in,
+its family walks up the pavement and in at the front door, and hearts go up. A tap on a person
+gets a hop and a hello; a tap on a finished building brings someone to the door: *Velkommen til
+villaen!* They stand at the front of the plots rather than on the pavement because the
+workshop's roof hides the pavement on the left.
+
+**The foreman** (`ui/Foreman.ts`). A man in a hard hat and a hi-vis vest pops up beside
+*Videre!* when a stage is done, whistles, and says what that job was *for* — *Gruset gør bunden
+fast, så huset ikke synker*, *Pælene holder huset, hvor jorden er blød* — which is how the game
+explains the order a real house goes up in. When a machine is built he tells a *Vidste du?*
+about the real one (`fact` on each machine in `state/Machines.ts`).
+
+And the machines blink now: `face()` in `MachineArt` closes their eyes for a moment on a clock
+of their own, which is all it takes for the ones redrawn every frame on the site. Shut eyes
+are drawn as little arcs, so one caught in a still drawing just looks content. With reduced
+motion nobody blinks, walks or hops.
+
 ### Buttons away from the bottom edge
 
 A phone's home gesture starts at the bottom edge, and a child pressing a big button that
@@ -328,10 +385,14 @@ src/
     Machines.ts          the twelve machines as data: parts, the third job
     Projects.ts          the stages, the buildings, which stages each goes through, its stars
     Shop.ts              the star shop's catalogue: town things, vehicles, liveries, house paints, upgrades
+    Treasures.ts         what is buried under each building, with a true fact about each
   objects/
     MachineArt.ts        every machine drawn part by part, with poses and a livery
     SiteArt.ts           sky, ground in cross-section, holes, piles, foundations, houses, workshop
     TownArt.ts           what the star shop puts in the town — vehicles too — and where
+    TreasureArt.ts       every find drawn, the rays behind it, the chest
+    FindCard.ts          a find jumping out of the bucket, with its name and fact
+    Townsfolk.ts         the people in the town: strolling, moving in, saying hello
     FeedbackEffects.ts   star bursts, confetti, praise, toasts
   scenes/
     BaseScene.ts         the four-layer background/ambient/dynamic/effects pattern
@@ -354,6 +415,7 @@ src/
     WindowScene.ts       put the windows in from the lift truck's basket
     AsphaltScene.ts      lay asphalt with the paver
     ShopScene.ts         spend stars, on five shelves
+    TreasureScene.ts     the treasure chest: every find, and the ones still buried
     SettingsScene.ts     one player's sound, progress, "start over" and "delete", for grown-ups
   helpers/
     Draw.ts              shared shapes: plates, captions, buttons, scenery
@@ -369,6 +431,7 @@ src/
     Players.ts           the animal faces, the whose-town-is-this tag, switching player
     StageDone.ts         the "Videre!" button a finished stage leaves behind
     Guide.ts             the orange pointing arrow, glowing drop zones, the hint banner
+    Foreman.ts           the foreman, who says what each job was for
 tests/
   game.ts                canvas-driving harness: players, taps, drags, holds, named-object lookup
   smoke.spec.ts          every screen draws on a realistic save
@@ -380,6 +443,7 @@ tests/
   state.spec.ts          reloads, damaged and old saves, starting over, a full town
   profiles.spec.ts       players: creating, switching, resetting, deleting, migrating, restoring
   shop.spec.ts           buying, vehicles waiting for buildings, upgrades in order, the rank staying put
+  treasure.spec.ts       finds in the holes, the chest, the townspeople, the foreman
   screen.spec.ts         a phone and a tablet, and turning the screen
   native.spec.ts         the Android back button and offline play
   sound.spec.ts          the audio contract
@@ -449,6 +513,10 @@ building it has on its new plot and carries on with the building it was on; the 
 in between are simply empty, waiting. A save from any other version starts fresh rather than
 half-loading.
 
+The treasure chest added two fields, `treasures` and `treasuresSeen`, without a new version:
+a save without them simply has nothing found yet. `load()` keeps only finds that still exist,
+once each, and never more seen than found.
+
 Tank filling is called every frame while the nozzle is held, so it does not write the save
 itself except on the frame the tank becomes full; the scene saves when the nozzle is let go.
 
@@ -470,6 +538,7 @@ over exactly the timing bugs worth knowing about.
 
 `helpers/Audio.ts` synthesises everything: a clank when a part snaps on, glugs while a tank
 fills, the scoop of the bucket and the slide of earth off it, the reversing beeper, the
-winch, the horn, and a generative ambient bed of music that never repeats exactly. The
+winch, the horn, a glittering climb for a find, a two-note *hej!* from the townspeople and
+the foreman's whistle, and a generative ambient bed of music that never repeats exactly. The
 context is built on the first gesture, never at boot, and nothing in the game sounds like
 being told off.

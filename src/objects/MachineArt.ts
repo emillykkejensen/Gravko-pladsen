@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { reduceMotion } from '../helpers/Motion';
 import { COLORS, LINE } from '../config';
 import { plate } from '../helpers/Draw';
 import type { MachineId } from '../state/Machines';
@@ -206,17 +207,43 @@ function wheel(g: Phaser.GameObjects.Graphics, s: Style, x: number, y: number, r
   }
 }
 
+/** How often a machine blinks, and for how long its eyes stay shut, in ms. */
+const BLINK_EVERY = 4300;
+const BLINK_FOR = 140;
+
+/**
+ * Whether a face is mid-blink right now. Machines on the building site are redrawn every
+ * frame, so reading the clock here is all it takes for them to blink; `seed` (where the face
+ * is) keeps two machines from blinking in step. Never with reduced motion.
+ */
+function blinking(seed: number): boolean {
+  if (reduceMotion()) return false;
+  const offset = Math.abs(Math.round(seed * 97)) % BLINK_EVERY;
+  return (performance.now() + offset) % BLINK_EVERY < BLINK_FOR;
+}
+
 /**
  * The windscreen with a face in it — the thing that makes a machine a character.
  * Eyes as short upright ovals and a small smile, like the reference picture.
  */
 export function face(g: Phaser.GameObjects.Graphics, cx: number, cy: number, size: number, happy = true): void {
-  g.fillStyle(COLORS.outline);
-  g.fillEllipse(cx - size * 0.32, cy - size * 0.1, size * 0.13, size * 0.22);
-  g.fillEllipse(cx + size * 0.32, cy - size * 0.1, size * 0.13, size * 0.22);
-  g.fillStyle(COLORS.white, 0.9);
-  g.fillCircle(cx - size * 0.3, cy - size * 0.15, size * 0.035 + 0.6);
-  g.fillCircle(cx + size * 0.34, cy - size * 0.15, size * 0.035 + 0.6);
+  if (blinking(cx + cy)) {
+    // eyes shut: two little arcs, which read as a contented squint if they are ever caught
+    // in a drawing that does not move
+    g.lineStyle(Math.max(2, size * 0.06), COLORS.outline, 1);
+    for (const ex of [cx - size * 0.32, cx + size * 0.32]) {
+      g.beginPath();
+      g.arc(ex, cy - size * 0.06, size * 0.08, Math.PI * 1.1, Math.PI * 1.9, false);
+      g.strokePath();
+    }
+  } else {
+    g.fillStyle(COLORS.outline);
+    g.fillEllipse(cx - size * 0.32, cy - size * 0.1, size * 0.13, size * 0.22);
+    g.fillEllipse(cx + size * 0.32, cy - size * 0.1, size * 0.13, size * 0.22);
+    g.fillStyle(COLORS.white, 0.9);
+    g.fillCircle(cx - size * 0.3, cy - size * 0.15, size * 0.035 + 0.6);
+    g.fillCircle(cx + size * 0.34, cy - size * 0.15, size * 0.035 + 0.6);
+  }
   g.lineStyle(Math.max(2, size * 0.07), COLORS.outline, 1);
   g.beginPath();
   if (happy) g.arc(cx, cy + size * 0.06, size * 0.2, Phaser.Math.DegToRad(20), Phaser.Math.DegToRad(160), false);
